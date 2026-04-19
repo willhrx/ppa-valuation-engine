@@ -19,7 +19,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from ppa_engine.config import PPAConfig
+from ppa_engine.config import PPAConfig, DEFAULT_CONFIG
 
 
 def compute_npv(
@@ -54,5 +54,27 @@ def compute_npv(
     at spot; negative NPV means the spot was higher (producer left money on
     the table, offtaker benefited).
     """
-    # TODO (Phase 2): implement
-    raise NotImplementedError("NPV calculator will be implemented in Phase 2.")
+    if config is None:
+        config = DEFAULT_CONFIG
+
+    # Handle empty series
+    if len(volume) == 0:
+        return 0.0
+
+    r = config.deal.discount_rate  # annual discount rate (default 0.06)
+
+    # Hourly cash flows (producer perspective: positive when strike > spot)
+    cash_flows = volume * (strike_price - market_price)
+
+    # Compute hours elapsed from contract start
+    start_time = volume.index[0]
+    hours_elapsed = (volume.index - start_time).total_seconds() / 3600.0
+
+    # Continuous discount factors: (1 + r)^(-t/8760)
+    # where t is hours from start and 8760 is hours per year
+    discount_factors = (1 + r) ** (-hours_elapsed / 8760)
+
+    # NPV = sum of discounted cash flows
+    npv = float((cash_flows * discount_factors).sum())
+
+    return npv

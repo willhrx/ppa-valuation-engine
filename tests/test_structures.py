@@ -37,7 +37,7 @@ def test_pay_as_produced_equals_solar(sample_data):
     solar, load = sample_data
     structure = PayAsProduced()
     vol = structure.settled_volume(solar, load)
-    pd.testing.assert_series_equal(vol.values, solar.values, check_names=False)
+    pd.testing.assert_series_equal(vol, solar, check_names=False)
 
 
 def test_pay_as_produced_same_index(sample_data):
