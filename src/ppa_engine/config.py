@@ -117,8 +117,9 @@ class MarketPriceConfig:
     ])
 
     # Layer 4 — cannibalisation (solar buildout suppressing midday prices)
-    cannibalisation_alpha_2027: float = 12.0   # EUR/MWh at full solar proxy
-    cannibalisation_alpha_2036: float = 37.0   # grows linearly to this by 2036
+    # Calibrated to achieve capture rate ~0.80 in 2027 declining to ~0.65 by 2036
+    cannibalisation_alpha_2027: float = 55.0   # EUR/MWh at full solar proxy
+    cannibalisation_alpha_2036: float = 90.0   # grows linearly to this by 2036
 
     # Layer 5 — AR(1) noise
     ar1_phi: float = 0.70
