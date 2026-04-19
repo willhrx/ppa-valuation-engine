@@ -13,7 +13,6 @@ This project builds an end-to-end PPA valuation engine that takes a forward-look
 The model is built around a concrete deal scenario to keep everything grounded:
 
 | Parameter | Value |
-|---|---|
 | Asset | 50 MW solar PV, utility-scale |
 | Location | Utrecht, Netherlands (52.1°N, 5.1°E) |
 | Operational start | 1 January 2027 |
@@ -47,7 +46,6 @@ This cannibalisation effect is the single most important driver of solar PPA eco
 ### Supply Structures
 
 | Structure | Volume delivered | Risk allocation |
-|---|---|---|
 | **Pay-as-produced** | Actual asset output | Consumer carries price and profile risk; cheapest structure |
 | **Pay-as-nominated** | Day-ahead forecast; imbalances settled at imbalance price | Producer takes forecast accuracy risk; +3–5% premium |
 | **Baseload** | Fixed MW every hour; producer covers shortfalls on spot market | Producer carries nearly all risk; most expensive structure |
@@ -55,7 +53,6 @@ This cannibalisation effect is the single most important driver of solar PPA eco
 ### Pricing Structures
 
 | Structure | Mechanism |
-|---|---|
 | **Fixed flat** | Single price for the full term |
 | **Fixed escalated** | Fixed with annual escalator (e.g. inflation-linked) |
 | **Indexed** | Base price linked to an index, with optional floor and cap |
@@ -77,7 +74,7 @@ The model is a scenario tool: swap the assumptions, re-run, and observe how the 
 
 ## Project Structure
 
-```
+```text
 ppa-valuation-engine/
 ├── src/
 │   └── ppa_engine/

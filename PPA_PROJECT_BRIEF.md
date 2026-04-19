@@ -11,15 +11,18 @@ The goal is to build an industry-grade PPA valuation engine from first principle
 ## Key Conceptual Framing
 
 ### What this model IS
+
 - A scenario-conditional pricing engine: "Under these stated assumptions, the PPA is worth €X, and here is how that changes if you disagree with any assumption."
 - A risk decomposition tool: which assumptions drive the most uncertainty in the deal value?
 - A negotiation framework: what is the producer's break-even price vs the consumer's alternative, and what is the acceptable pricing range?
 
 ### What this model IS NOT
+
 - A price forecaster. Every forward-looking number is wrong. The model's value lies in transparency, auditability, and the ability to re-price when assumptions are challenged.
 - Every layer of the data generation represents an explicit, named, documentable assumption — not a prediction.
 
 ### The four PPA risks being modelled (from Sia Partners framework)
+
 1. **Volume risk** — uncertainty in how much the asset produces annually
 2. **Profile risk** — uncertainty in *when* production occurs relative to price patterns (the capture-price problem)
 3. **Price risk** — uncertainty in wholesale market prices
@@ -30,7 +33,7 @@ The goal is to build an industry-grade PPA valuation engine from first principle
 ## Deal Specification (Primary Case)
 
 | Parameter | Value |
-|---|---|
+| --- | --- |
 | Asset type | Solar PV (utility-scale) |
 | Capacity | 50 MW |
 | Location | Utrecht, Netherlands (lat 52.1°N, lon 5.1°E) |
@@ -46,21 +49,27 @@ The goal is to build an industry-grade PPA valuation engine from first principle
 ## Project Phases
 
 ### Phase 0 — Repo Scaffolding
+
 Set up the project structure, dependencies, and configuration.
 
-### Phase 1 — Synthetic Data Generation (CURRENT PHASE)
+### Phase 1 — Synthetic Data Generation
+
 Generate forward-looking "central case" hourly data for the full 10-year horizon. This is not forecasting — it is constructing a reference scenario with the right statistical properties so that downstream valuations are meaningful.
 
-### Phase 2 — Core Valuation Engine
+### Phase 2 — Core Valuation Engine (CURRENT PHASE)
+
 NPV calculator, three supply structures (pay-as-produced, pay-as-nominated, baseload), four pricing structures (fixed flat, fixed escalated, indexed with floor/cap, floating), and capture-price decomposition.
 
 ### Phase 3 — Risk Quantification (Monte Carlo)
+
 Stochastic price and production simulators, 1,000-path Monte Carlo, risk metrics (VaR, Expected Shortfall, P10/P50/P90 NPV), risk decomposition by source.
 
 ### Phase 4 — Pricing Solver & Scenario Analysis
+
 Break-even price solver (scipy.optimize.brentq), sensitivity/tornado analysis, floor/cap option pricing.
 
 ### Phase 5 — Reporting & Documentation
+
 Deal walkthrough notebook, methodology doc, portfolio-ready README.
 
 ---
@@ -70,6 +79,7 @@ Deal walkthrough notebook, methodology doc, portfolio-ready README.
 ### 1a. Solar Production — `src/ppa_engine/data/solar_production.py`
 
 Use **pvlib** for the deterministic solar geometry and clear-sky model:
+
 1. Define location: `pvlib.location.Location(lat=52.1, lon=5.1, tz='Europe/Amsterdam', altitude=10)`
 2. Generate hourly timestamps for the full 2027-2036 horizon
 3. Compute clear-sky irradiance using Ineichen model (`pvlib.clearsky.ineichen()`)
@@ -79,6 +89,7 @@ Use **pvlib** for the deterministic solar geometry and clear-sky model:
 7. Multiply by capacity (50 MW) to get hourly AC output in MWh
 
 **Sanity checks:**
+
 - Annual yield: 900-1,000 kWh/kWp
 - Capacity factor: 10-12%
 - Zero generation between sunset and sunrise
@@ -95,43 +106,55 @@ Use **pvlib** for the deterministic solar geometry and clear-sky model:
 Build prices as a **sum of five layers**, each representing an explicit assumption:
 
 **Layer 1 — Long-term level and drift:**
-```
+
+```text
 level(t) = base_price + drift × years_from_2027(t)
 ```
+
 Default: base_price=75 €/MWh, drift=-1.5 €/MWh/year. This is the assumption with least confidence and should be clearly flagged.
 
 **Layer 2 — Seasonal shape:**
-```
+
+```text
 seasonal(t) = amplitude × cos(2π × (day_of_year - peak_day) / 365)
 ```
+
 Default: amplitude=15 €/MWh, peak_day=15 (mid-January). Winter high, summer low.
 
 **Layer 3 — Intra-day shape:**
+
 - 24-hour vector of hour-of-day multipliers
 - Morning peak (~07:00-09:00), evening peak (~17:00-20:00), midday dip in summer
 - Separate weekday/weekend profiles (weekend is flatter, lower)
 
 **Layer 4 — Cannibalisation term (critical for solar PPA valuation):**
-```
+
+```text
 cannibalisation(t) = -α(year) × system_solar_proxy(t)
 ```
+
 Where system_solar_proxy(t) is a sinusoid peaking at noon in summer (all NL solar generates simultaneously), and α(year) grows linearly reflecting continued solar buildout. Calibrate so mid-summer noon prices are ~€40-50 in 2027 and occasionally negative by 2034.
 
 **Layer 5 — Autocorrelated noise (AR(1)):**
-```
+
+```text
 noise(t) = φ × noise(t-1) + ε(t), where ε ~ Normal(0, σ)
 ```
+
 Default: φ=0.7, σ=8 €/MWh. Autocorrelation is essential because:
+
 - Physical price drivers (gas, weather, outages) persist over multiple hours/days
 - It creates realistic sustained "good periods" and "bad periods"
 - It correctly models the clustering of low prices with high solar output, which is what makes capture-price erosion a *clustering phenomenon* rather than just an average effect
 - Without it, Monte Carlo would systematically underestimate revenue volatility
 
 **Edge cases:**
+
 - Allow negative prices (real EPEX NL goes negative on sunny windy Sundays) — do NOT floor at zero
 - Skip price spikes in v1 (rare, cancel out over 10 years)
 
 **Sanity checks:**
+
 - Annual average: ~€80 in 2027, declining to ~€60 by 2036
 - Peak hours (17:00-20:00 winter weekdays): €120-150
 - Solar-peak hours (12:00-14:00 summer): €20-40 early years, occasionally negative later
@@ -146,7 +169,7 @@ All assumptions should be configurable, not hardcoded. Use dataclasses or a conf
 
 ## Repo Structure
 
-```
+```text
 ppa-valuation-engine/
 ├── README.md
 ├── pyproject.toml
@@ -202,7 +225,7 @@ ppa-valuation-engine/
 
 ## Dependencies
 
-```
+```text
 pandas>=2.0
 numpy>=1.24
 scipy>=1.10
