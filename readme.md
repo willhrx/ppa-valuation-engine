@@ -23,7 +23,7 @@ The model is built around a concrete deal scenario to keep everything grounded:
 
 ## What the Model Does
 
-Given a set of explicitly stated assumptions about the future (market price trajectory, solar resource, demand patterns), the engine:
+Given a set of explicitly stated assumptions about the future (market price trajectory, solar resource, demand patterns etc.), the engine:
 
 1. **Generates synthetic hourly data** for production, consumption, and day-ahead prices across the full contract horizon — not as a forecast, but as a coherent reference scenario with realistic statistical properties.
 
