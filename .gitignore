@@ -13,6 +13,7 @@ venv/
 env/
 
 # Jupyter
+notebooks/
 .ipynb_checkpoints/
 *.ipynb~
 
@@ -36,7 +37,6 @@ Thumbs.db
 .pytest_cache/
 .coverage
 htmlcov/
-notebooks/
 
 # Distribution
 *.whl
