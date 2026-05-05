@@ -36,6 +36,7 @@ Thumbs.db
 .pytest_cache/
 .coverage
 htmlcov/
+notebooks/
 
 # Distribution
 *.whl
