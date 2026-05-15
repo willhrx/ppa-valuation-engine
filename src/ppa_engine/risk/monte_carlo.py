@@ -18,11 +18,13 @@ Variance decomposition uses the three-ensemble method:
 
 from __future__ import annotations
 
+import logging
 import time
 from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
+from scipy.special import expit, logit
 
 from ppa_engine.config import PPAConfig
 from ppa_engine.data.consumer_load import generate_consumer_load
@@ -34,7 +36,10 @@ from ppa_engine.data.market_prices import (
     _layer4_cannibalisation,
 )
 from ppa_engine.data.solar_production import _clearsky_poa
+from ppa_engine.utils.ar1 import ar1_logit_process, ar1_process
 from ppa_engine.valuation.engine import value_all_combinations
+
+logger = logging.getLogger(__name__)
 
 # Seed base values for each ensemble — widely separated so per-path offsets
 # (i * _PATH_PRIME) never produce collisions across ensembles
@@ -89,25 +94,18 @@ def _solar_series(
     seed: int,
 ) -> pd.Series:
     """Generate one solar production path for a given seed."""
-    from scipy.special import expit, logit
-
     sc = config.solar
-    T = len(times)
-    phi = sc.cloud_factor_phi
-    scale = sc.cloud_factor_logit_scale
-    sigma_innov = np.sqrt(1.0 - phi * phi)
 
     monthly_logit = np.array([logit(m) for m in sc.monthly_cloud_means])
     hour_logit_mean = monthly_logit[np.array([t.month - 1 for t in times])]
 
-    rng = np.random.default_rng(seed)
-    eps = rng.standard_normal(T)
-    z = np.empty(T)
-    z[0] = eps[0]
-    for t in range(1, T):
-        z[t] = phi * z[t - 1] + sigma_innov * eps[t]
-
-    cloud = expit(hour_logit_mean + scale * z)
+    cloud = ar1_logit_process(
+        n=len(times),
+        phi=sc.cloud_factor_phi,
+        logit_scale=sc.cloud_factor_logit_scale,
+        monthly_logit_means=hour_logit_mean,
+        seed=seed,
+    )
     out = (
         sc.capacity_mw
         * sc.performance_ratio
@@ -125,18 +123,12 @@ def _price_series(
 ) -> pd.Series:
     """Generate one price path for a given seed."""
     mc = config.market
-    T = len(times)
-    phi = mc.ar1_phi
-    sigma = mc.ar1_sigma
-    sigma_innov = sigma * np.sqrt(1.0 - phi * phi)
-
-    rng = np.random.default_rng(seed)
-    eps = rng.standard_normal(T)
-    noise = np.empty(T)
-    noise[0] = sigma * eps[0]
-    for t in range(1, T):
-        noise[t] = phi * noise[t - 1] + sigma_innov * eps[t]
-
+    noise = ar1_process(
+        n=len(times),
+        phi=mc.ar1_phi,
+        sigma_stationary=mc.ar1_sigma,
+        seed=seed,
+    )
     return pd.Series(
         deterministic_layers + noise, index=times, name="market_price_eur_mwh"
     )
@@ -159,7 +151,6 @@ def _run_ensemble(
     base_strike: float,
     central_solar: pd.Series,
     central_prices: pd.Series,
-    verbose: bool,
 ) -> pd.DataFrame:
     """
     Run n_paths for one decomposition mode.
@@ -168,8 +159,7 @@ def _run_ensemble(
     mode='price'  — only price seed perturbed; solar = central_solar
     mode='volume' — only solar seed perturbed; prices = central_prices
     """
-    if verbose:
-        print(f"  [{mode}] running {n_paths} paths...")
+    logger.info("[%s] running %d paths...", mode, n_paths)
 
     t0 = time.time()
     rows: list[pd.DataFrame] = []
@@ -202,13 +192,13 @@ def _run_ensemble(
         combo["mode"] = mode
         rows.append(combo)
 
-        if verbose and ((i + 1) % 100 == 0 or i == n_paths - 1):
+        if (i + 1) % 100 == 0 or i == n_paths - 1:
             elapsed = time.time() - t0
             rate = (i + 1) / elapsed
             eta = (n_paths - i - 1) / rate
-            print(
-                f"    path {i + 1:>4}/{n_paths}  "
-                f"elapsed={elapsed:5.1f}s  rate={rate:.1f}p/s  eta={eta:.0f}s"
+            logger.info(
+                "  path %4d/%d  elapsed=%5.1fs  rate=%.1fp/s  eta=%.0fs",
+                i + 1, n_paths, elapsed, rate, eta,
             )
 
     return pd.concat(rows, ignore_index=True)
@@ -266,17 +256,26 @@ def run_monte_carlo(
     if modes is None:
         modes = ["joint", "price", "volume"]
 
+    # When verbose=True attach a stdout handler at INFO level for this run.
+    # Cleaned up at the end so we do not leak handlers across calls.
+    _handler = None
+    _prev_level = logger.level
+    if verbose:
+        _handler = logging.StreamHandler()
+        _handler.setLevel(logging.INFO)
+        _handler.setFormatter(logging.Formatter("%(message)s"))
+        logger.addHandler(_handler)
+        logger.setLevel(logging.INFO)
+
     t_start = time.time()
 
     # Step 1: build time index
     times = _build_timestamps(config)
     T = len(times)
-    if verbose:
-        print(f"Horizon: {times[0]} to {times[-1]}  ({T:,} hours)")
+    logger.info("Horizon: %s to %s  (%s hours)", times[0], times[-1], f"{T:,}")
 
     # Step 2: cache deterministic inputs (pvlib is expensive — compute once)
-    if verbose:
-        print("  Caching deterministic inputs...")
+    logger.info("Caching deterministic inputs...")
 
     poa_clearsky = _clearsky_poa(times, config)
 
@@ -294,8 +293,7 @@ def run_monte_carlo(
     load = generate_consumer_load(config)
 
     # Step 3: central scenario at base seeds
-    if verbose:
-        print("  Computing central scenario...")
+    logger.info("Computing central scenario...")
     central_solar = _solar_series(
         times, poa_clearsky, degradation, config, config.solar.seed
     )
@@ -312,19 +310,20 @@ def run_monte_carlo(
         df = _run_ensemble(
             mode, times, poa_clearsky, degradation, deterministic_price,
             load, config, n_paths, base_strike, central_solar, central_prices,
-            verbose,
         )
         frames.append(df)
 
     paths_df = pd.concat(frames, ignore_index=True)
     elapsed = time.time() - t_start
 
-    if verbose:
-        print(
-            f"\n  Done in {elapsed:.1f}s.  "
-            f"Total: {len(paths_df):,} rows "
-            f"({n_paths} paths × {len(modes)} modes × 12 combos)."
-        )
+    logger.info(
+        "Done in %.1fs.  Total: %s rows (%d paths x %d modes x 12 combos).",
+        elapsed, f"{len(paths_df):,}", n_paths, len(modes),
+    )
+
+    if _handler is not None:
+        logger.removeHandler(_handler)
+        logger.setLevel(_prev_level)
 
     return MonteCarloResult(
         paths_df=paths_df,

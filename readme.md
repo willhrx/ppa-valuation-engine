@@ -2,6 +2,24 @@
 
 A Python-based valuation and risk analysis tool for Power Purchase Agreements on renewable energy assets, built from first principles for the Dutch wholesale electricity market.
 
+## Quick Start
+
+```bash
+git clone https://github.com/willhrx/ppa-valuation-engine.git
+cd ppa-valuation-engine
+pip install -e ".[dev]"
+streamlit run app/main.py
+```
+
+The app opens at `http://localhost:8501`.
+
+- **Deal Setup** — configure your solar asset, market assumptions, and offtaker load
+- **Run Simulation** — launch a Monte Carlo simulation (500 paths ≈ 20 s)
+- **Risk Summary** — interactive dashboard with NPV distributions, break-even analysis, and risk attribution charts
+- **Reports** — download a PDF deal summary or Excel workbook
+
+Screenshot: _add screenshot of Risk Summary page here_
+
 ## Motivation
 
 Power Purchase Agreements are long-term contracts between renewable energy producers and consumers (offtakers) that fix the terms for selling electricity over periods of 3 to 25+ years. Valuing these contracts requires modelling the interaction between intermittent renewable production, hourly wholesale market prices, and the contractual structure that determines how volume, profile, and price risk are allocated between counterparties.

@@ -26,9 +26,10 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 import pvlib
-from scipy.special import expit, logit
+from scipy.special import logit
 
 from ppa_engine.config import PPAConfig
+from ppa_engine.utils.ar1 import ar1_logit_process
 
 
 def _build_timestamps(config: PPAConfig) -> pd.DatetimeIndex:
@@ -110,27 +111,17 @@ def _cloud_factor(times: pd.DatetimeIndex, config: PPAConfig) -> np.ndarray:
         Cloud factor values in (0, 1), shape (len(times),).
     """
     sc = config.solar
-    rng = np.random.default_rng(sc.seed)
 
-    n = len(times)
-    phi = sc.cloud_factor_phi
-    scale = sc.cloud_factor_logit_scale
-
-    # Monthly means → logit space
     monthly_logit = np.array([logit(m) for m in sc.monthly_cloud_means])
-    # Broadcast monthly logit to every hour
     hour_logit_mean = monthly_logit[np.array([t.month - 1 for t in times])]
 
-    # Stationary AR(1) in standard normal space: z ~ N(0,1) marginally
-    sigma_innov = np.sqrt(1.0 - phi**2)
-    eps = rng.standard_normal(n)
-    z = np.empty(n)
-    z[0] = eps[0]                          # initialise from stationary N(0,1)
-    for t in range(1, n):
-        z[t] = phi * z[t - 1] + sigma_innov * eps[t]
-
-    # Map back to (0, 1)
-    return expit(hour_logit_mean + scale * z)
+    return ar1_logit_process(
+        n=len(times),
+        phi=sc.cloud_factor_phi,
+        logit_scale=sc.cloud_factor_logit_scale,
+        monthly_logit_means=hour_logit_mean,
+        seed=sc.seed,
+    )
 
 
 def generate_solar_production(config: PPAConfig | None = None) -> pd.Series:

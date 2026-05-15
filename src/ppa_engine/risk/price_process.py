@@ -27,6 +27,7 @@ from ppa_engine.data.market_prices import (
     _layer3_intraday,
     _layer4_cannibalisation,
 )
+from ppa_engine.utils.ar1 import ar1_noise_matrix as _shared_ar1_noise_matrix
 
 # Large prime for per-path seed derivation; prevents seed collisions across paths
 _PATH_PRIME = 1_000_003
@@ -39,31 +40,15 @@ def _ar1_noise_matrix(
     sigma_stationary: float,
     base_seed: int,
 ) -> np.ndarray:
-    """
-    Generate an (n_paths, T) matrix of independent stationary AR(1) noise.
-
-    Each row is an independent realisation with marginal distribution
-    N(0, sigma_stationary^2). Seeds are derived as base_seed + i * _PATH_PRIME,
-    guaranteeing independence and reproducibility without sequential RNG state.
-
-    The inner loop runs T iterations on an (n_paths,) vector — NumPy C-level
-    operations — which is ~50-100x faster than a pure Python path-at-a-time loop.
-    """
-    sigma_innov = sigma_stationary * np.sqrt(1.0 - phi * phi)
-
-    # Each path gets its own RNG for statistical independence
-    all_eps = np.empty((n_paths, T), dtype=np.float64)
-    for i in range(n_paths):
-        rng = np.random.default_rng(base_seed + i * _PATH_PRIME)
-        all_eps[i] = rng.standard_normal(T)
-
-    # Vectorised AR(1) recurrence: each time step updates all paths simultaneously
-    noise = np.empty((n_paths, T), dtype=np.float64)
-    noise[:, 0] = sigma_stationary * all_eps[:, 0]
-    for t in range(1, T):
-        noise[:, t] = phi * noise[:, t - 1] + sigma_innov * all_eps[:, t]
-
-    return noise
+    """Vectorised (n_paths, T) AR(1) noise matrix (thin wrapper)."""
+    return _shared_ar1_noise_matrix(
+        T=T,
+        n_paths=n_paths,
+        phi=phi,
+        sigma_stationary=sigma_stationary,
+        base_seed=base_seed,
+        path_prime=_PATH_PRIME,
+    )
 
 
 def build_deterministic_price(

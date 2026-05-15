@@ -195,6 +195,74 @@ class PPAConfig:
     load: ConsumerLoadConfig = field(default_factory=ConsumerLoadConfig)
     deal: DealConfig = field(default_factory=DealConfig)
 
+    def validate(self) -> None:
+        """Validate config values, raising ValueError on any bad input.
+
+        Checks every constraint the engine relies on. Call before any
+        downstream generator if input may be user-edited.
+        """
+        import pandas as pd
+
+        try:
+            start = pd.Timestamp(self.deal.start_date)
+            end = pd.Timestamp(self.deal.end_date)
+        except (ValueError, TypeError) as exc:
+            raise ValueError(
+                f"Invalid deal dates: start={self.deal.start_date!r}, "
+                f"end={self.deal.end_date!r}"
+            ) from exc
+        if start >= end:
+            raise ValueError(
+                f"deal.start_date ({self.deal.start_date}) must be strictly "
+                f"before deal.end_date ({self.deal.end_date})."
+            )
+
+        if self.solar.capacity_mw <= 0:
+            raise ValueError(
+                f"solar.capacity_mw must be > 0 (got {self.solar.capacity_mw})."
+            )
+
+        if not (0.0 < self.solar.performance_ratio < 1.0):
+            raise ValueError(
+                f"solar.performance_ratio must be in (0, 1) "
+                f"(got {self.solar.performance_ratio})."
+            )
+
+        if not (0.0 < self.solar.degradation_rate < 0.02):
+            raise ValueError(
+                f"solar.degradation_rate must be in (0, 0.02) "
+                f"(got {self.solar.degradation_rate})."
+            )
+
+        if not (0.0 < self.deal.discount_rate < 0.30):
+            raise ValueError(
+                f"deal.discount_rate must be in (0, 0.30) "
+                f"(got {self.deal.discount_rate})."
+            )
+
+        if self.load.annual_consumption_gwh <= 0:
+            raise ValueError(
+                f"load.annual_consumption_gwh must be > 0 "
+                f"(got {self.load.annual_consumption_gwh})."
+            )
+
+        if len(self.solar.monthly_cloud_means) != 12:
+            raise ValueError(
+                f"solar.monthly_cloud_means must have length 12 "
+                f"(got {len(self.solar.monthly_cloud_means)})."
+            )
+
+        if len(self.market.weekday_hourly_adder) != 24:
+            raise ValueError(
+                f"market.weekday_hourly_adder must have length 24 "
+                f"(got {len(self.market.weekday_hourly_adder)})."
+            )
+        if len(self.market.weekend_hourly_adder) != 24:
+            raise ValueError(
+                f"market.weekend_hourly_adder must have length 24 "
+                f"(got {len(self.market.weekend_hourly_adder)})."
+            )
+
 
 # Convenience: a ready-to-use default config instance
 DEFAULT_CONFIG = PPAConfig()

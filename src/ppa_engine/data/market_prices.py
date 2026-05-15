@@ -47,6 +47,7 @@ import numpy as np
 import pandas as pd
 
 from ppa_engine.config import PPAConfig
+from ppa_engine.utils.ar1 import ar1_process
 
 
 def _build_timestamps(config: PPAConfig) -> pd.DatetimeIndex:
@@ -145,20 +146,12 @@ def _layer5_ar1_noise(times: pd.DatetimeIndex, config: PPAConfig) -> np.ndarray:
     gas-price movements, weather events, and outages persist over hours/days.
     """
     mc = config.market
-    rng = np.random.default_rng(mc.seed)
-
-    n = len(times)
-    phi = mc.ar1_phi
-    sigma = mc.ar1_sigma
-    sigma_innov = sigma * np.sqrt(1.0 - phi**2)
-
-    eps = rng.standard_normal(n)
-    noise = np.empty(n)
-    noise[0] = sigma * eps[0]   # draw from stationary N(0, σ²)
-    for t in range(1, n):
-        noise[t] = phi * noise[t - 1] + sigma_innov * eps[t]
-
-    return noise
+    return ar1_process(
+        n=len(times),
+        phi=mc.ar1_phi,
+        sigma_stationary=mc.ar1_sigma,
+        seed=mc.seed,
+    )
 
 
 def generate_market_prices(config: PPAConfig | None = None) -> pd.Series:
