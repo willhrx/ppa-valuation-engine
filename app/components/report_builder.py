@@ -9,8 +9,10 @@ from __future__ import annotations
 import io
 from dataclasses import asdict
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
+import matplotlib
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
@@ -18,6 +20,18 @@ from fpdf import FPDF
 
 from app.components import charts
 from ppa_engine.config import PPAConfig
+
+
+_FONT_DIR = Path(matplotlib.__file__).parent / "mpl-data" / "fonts" / "ttf"
+_UNICODE_FONT = "DejaVu"
+
+
+def _register_unicode_fonts(pdf: FPDF) -> None:
+    """Register DejaVu Sans (bundled with matplotlib) as a Unicode font family."""
+    pdf.add_font(_UNICODE_FONT, "", str(_FONT_DIR / "DejaVuSans.ttf"))
+    pdf.add_font(_UNICODE_FONT, "B", str(_FONT_DIR / "DejaVuSans-Bold.ttf"))
+    pdf.add_font(_UNICODE_FONT, "I", str(_FONT_DIR / "DejaVuSans-Oblique.ttf"))
+    pdf.add_font(_UNICODE_FONT, "BI", str(_FONT_DIR / "DejaVuSans-BoldOblique.ttf"))
 
 
 # ---------------------------------------------------------------------------
@@ -35,29 +49,32 @@ def _fig_to_png(fig: go.Figure) -> bytes:
 
 class _PDF(FPDF):
     def header(self):
-        self.set_font("Helvetica", "B", 10)
+        self.set_font(_UNICODE_FONT, "B", 10)
         self.set_text_color(120, 120, 120)
-        self.cell(0, 8, "PPA Valuation Report", align="L")
-        self.cell(0, 8, datetime.utcnow().strftime("Generated %Y-%m-%d %H:%M UTC"), align="R")
+        half = (self.w - self.l_margin - self.r_margin) / 2
+        self.cell(half, 8, "PPA Valuation Report", align="L")
+        self.cell(half, 8, datetime.utcnow().strftime("Generated %Y-%m-%d %H:%M UTC"), align="R")
         self.ln(12)
 
     def footer(self):
         self.set_y(-12)
-        self.set_font("Helvetica", "I", 8)
+        self.set_font(_UNICODE_FONT, "I", 8)
         self.set_text_color(150, 150, 150)
         self.cell(0, 8, f"Page {self.page_no()}", align="C")
 
 
 def _h(pdf: _PDF, text: str, size: int = 14) -> None:
-    pdf.set_font("Helvetica", "B", size)
+    pdf.set_font(_UNICODE_FONT, "B", size)
     pdf.set_text_color(15, 23, 42)
+    pdf.set_x(pdf.l_margin)
     pdf.cell(0, 10, text, ln=1)
 
 
 def _p(pdf: _PDF, text: str, size: int = 10) -> None:
-    pdf.set_font("Helvetica", "", size)
+    pdf.set_font(_UNICODE_FONT, "", size)
     pdf.set_text_color(30, 41, 59)
-    pdf.multi_cell(0, 5, text)
+    pdf.set_x(pdf.l_margin)
+    pdf.multi_cell(pdf.epw, 5, text)
 
 
 def _add_image(pdf: _PDF, png_bytes: bytes, *, w: float = 180, h: float | None = None) -> None:
@@ -68,8 +85,9 @@ def _add_image(pdf: _PDF, png_bytes: bytes, *, w: float = 180, h: float | None =
     kwargs: dict[str, Any] = {"w": w}
     if h is not None:
         kwargs["h"] = h
-    pdf.image(bio, **kwargs)
+    pdf.image(bio, x=pdf.l_margin, **kwargs)
     pdf.ln(2)
+    pdf.set_x(pdf.l_margin)
 
 
 def _table(pdf: _PDF, df: pd.DataFrame, col_widths: list[float] | None = None) -> None:
@@ -79,14 +97,14 @@ def _table(pdf: _PDF, df: pd.DataFrame, col_widths: list[float] | None = None) -
         total = 190.0
         col_widths = [total / len(df.columns)] * len(df.columns)
 
-    pdf.set_font("Helvetica", "B", 9)
+    pdf.set_font(_UNICODE_FONT, "B", 9)
     pdf.set_fill_color(30, 41, 59)
     pdf.set_text_color(241, 245, 249)
     for col, w in zip(df.columns, col_widths):
         pdf.cell(w, 7, str(col)[:30], border=1, align="C", fill=True)
     pdf.ln()
 
-    pdf.set_font("Helvetica", "", 9)
+    pdf.set_font(_UNICODE_FONT, "", 9)
     pdf.set_text_color(30, 41, 59)
     for _, row in df.iterrows():
         for val, w in zip(row.values, col_widths):
@@ -110,16 +128,17 @@ def build_pdf_report(
     solver_results: dict,
 ) -> bytes:
     pdf = _PDF(orientation="P", unit="mm", format="A4")
+    _register_unicode_fonts(pdf)
     pdf.set_auto_page_break(auto=True, margin=15)
 
     # ---- Page 1 — Cover ------------------------------------------------
     pdf.add_page()
-    pdf.set_font("Helvetica", "B", 22)
+    pdf.set_font(_UNICODE_FONT, "B", 22)
     pdf.set_text_color(15, 23, 42)
     pdf.ln(40)
     pdf.cell(0, 14, "PPA Valuation Report", align="C", ln=1)
 
-    pdf.set_font("Helvetica", "", 12)
+    pdf.set_font(_UNICODE_FONT, "", 12)
     pdf.set_text_color(71, 85, 105)
     pdf.cell(0, 8, "Scenario-conditional valuation and risk decomposition", align="C", ln=1)
     pdf.ln(10)
@@ -137,7 +156,7 @@ def build_pdf_report(
     )
     _table(pdf, deal_rows, col_widths=[80, 110])
     pdf.ln(8)
-    pdf.set_font("Helvetica", "I", 9)
+    pdf.set_font(_UNICODE_FONT, "I", 9)
     pdf.set_text_color(120, 120, 120)
     pdf.cell(0, 6, datetime.utcnow().strftime("Generated %Y-%m-%d %H:%M UTC"), align="L", ln=1)
 
