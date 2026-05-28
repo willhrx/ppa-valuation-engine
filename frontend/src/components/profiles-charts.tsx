@@ -4,7 +4,6 @@ import {
   Area,
   CartesianGrid,
   ComposedChart,
-  Legend,
   Line,
   ResponsiveContainer,
   Tooltip,
@@ -12,13 +11,7 @@ import {
   YAxis,
 } from 'recharts'
 
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { PanelError, PanelLoading } from '@/components/spinner'
 import { api, type PPAConfig, type ProfilesResponse } from '@/lib/api'
@@ -30,9 +23,9 @@ interface ProfilesChartsProps {
   config: PPAConfig | null
 }
 
-const SOLAR_COLOR = 'var(--chart-1)'
-const PRICE_COLOR = 'var(--chart-3)'
-const LOAD_COLOR = 'var(--chart-2)'
+const SOLAR_COLOR = 'var(--solar)'
+const LOAD_COLOR = 'var(--load)'
+const PRICE_COLOR = 'var(--price)'
 
 export function ProfilesCharts({ config }: ProfilesChartsProps) {
   const { state, refetch } = useAsyncCall<ProfilesResponse>(
@@ -44,30 +37,38 @@ export function ProfilesCharts({ config }: ProfilesChartsProps) {
   )
 
   return (
-    <Card className="h-full">
-      <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-3">
+    <Card className="h-full p-0">
+      <div className="flex items-start justify-between gap-4 border-b px-6 pt-5 pb-4">
         <div>
-          <CardTitle className="text-sm">Generation, load &amp; price profiles</CardTitle>
-          <CardDescription className="text-xs">
-            Central-scenario hourly series from{' '}
-            <code>/api/profiles</code>, aggregated client-side.
-          </CardDescription>
+          <div className="text-sm font-semibold tracking-[-0.005em]">
+            Generation, load &amp; price profiles
+          </div>
+          <p className="mt-1 text-[11.5px] text-muted-foreground">
+            Central-scenario hourly series from <code>/api/profiles</code>,
+            aggregated client-side.
+            {state.status === 'success' && (
+              <>
+                {' '}
+                <span className="font-mono">
+                  {state.data.n_hours.toLocaleString()} hours
+                </span>{' '}
+                · {state.data.timezone}
+              </>
+            )}
+          </p>
         </div>
         {state.status === 'success' && (
-          <div className="text-right text-[10px] text-muted-foreground">
-            {state.data.n_hours.toLocaleString()} hourly points ·{' '}
-            {state.data.timezone}
-            <button
-              type="button"
-              className="ml-2 underline-offset-2 hover:underline"
-              onClick={refetch}
-            >
-              refresh
-            </button>
-          </div>
+          <button
+            type="button"
+            className="text-[11px] text-muted-foreground underline-offset-2 hover:underline"
+            onClick={refetch}
+          >
+            refresh
+          </button>
         )}
-      </CardHeader>
-      <CardContent>
+      </div>
+
+      <CardContent className="px-4 pt-3 pb-4">
         {state.status === 'idle' && (
           <p className="text-xs text-muted-foreground">
             Apply a configuration to load profiles.
@@ -83,68 +84,136 @@ export function ProfilesCharts({ config }: ProfilesChartsProps) {
   )
 }
 
+interface LegendPillProps {
+  color: string
+  label: string
+  value: string
+}
+
+function LegendPill({ color, label, value }: LegendPillProps) {
+  return (
+    <div className="flex items-center gap-2 rounded-full border bg-card px-2.5 py-1 text-[11px]">
+      <span
+        className="h-2 w-2 rounded-full"
+        style={{
+          background: color,
+          boxShadow: `0 0 0 3px color-mix(in oklch, ${color} 15%, transparent)`,
+        }}
+      />
+      <span className="font-medium" style={{ color: 'var(--text-soft)' }}>
+        {label}
+      </span>
+      <span className="font-mono text-muted-foreground">{value}</span>
+    </div>
+  )
+}
+
 function ChartTabs({ profiles }: { profiles: ProfilesResponse }) {
   const daily = useMemo(() => aggregateToDaily(profiles), [profiles])
   const week = useMemo(() => {
-    // First full week of July, 2nd year of the horizon — guaranteed to land in summer.
     const year = Number(profiles.timestamps[0].slice(0, 4)) + 1
     return sliceWindow(profiles, `${year}-07-07`, 168)
   }, [profiles])
 
+  const dailyMeans = useMemo(() => {
+    if (daily.length === 0) return { solar: 0, load: 0, price: 0 }
+    const sum = daily.reduce(
+      (acc, d) => {
+        acc.solar += d.solar_mwh
+        acc.load += d.load_mwh
+        acc.price += d.market_price_eur_mwh
+        return acc
+      },
+      { solar: 0, load: 0, price: 0 },
+    )
+    return {
+      solar: sum.solar / daily.length,
+      load: sum.load / daily.length,
+      price: sum.price / daily.length,
+    }
+  }, [daily])
+
   return (
     <Tabs defaultValue="overview" className="w-full">
-      <TabsList className="grid w-full max-w-md grid-cols-2">
-        <TabsTrigger value="overview" className="text-xs">
-          Horizon overview (daily)
-        </TabsTrigger>
-        <TabsTrigger value="week" className="text-xs">
-          Sample week (hourly)
-        </TabsTrigger>
-      </TabsList>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <TabsList className="rounded-[9px] bg-muted p-1">
+          <TabsTrigger value="overview" className="text-[11.5px]">
+            Horizon · daily
+          </TabsTrigger>
+          <TabsTrigger value="week" className="text-[11.5px]">
+            Sample week · hourly
+          </TabsTrigger>
+        </TabsList>
 
-      <TabsContent value="overview" className="pt-3">
-        <div className="h-[360px] w-full">
+        <div className="flex flex-wrap gap-2">
+          <LegendPill
+            color={SOLAR_COLOR}
+            label="Solar generation"
+            value={`${fmtNumber(dailyMeans.solar, 0)} MWh/d avg`}
+          />
+          <LegendPill
+            color={LOAD_COLOR}
+            label="Offtaker load"
+            value={`${fmtNumber(dailyMeans.load, 0)} MWh/d avg`}
+          />
+          <LegendPill
+            color={PRICE_COLOR}
+            label="Day-ahead price"
+            value={`€${fmtNumber(dailyMeans.price, 1)}/MWh avg`}
+          />
+        </div>
+      </div>
+
+      <TabsContent value="overview" className="pt-4">
+        <div className="h-[340px] w-full">
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart
               data={daily}
-              margin={{ top: 10, right: 20, left: 0, bottom: 0 }}
+              margin={{ top: 10, right: 28, left: 0, bottom: 4 }}
             >
-              <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" />
+              <defs>
+                <linearGradient id="bold-solar" x1="0" x2="0" y1="0" y2="1">
+                  <stop offset="0%" stopColor={SOLAR_COLOR} stopOpacity={0.55} />
+                  <stop offset="100%" stopColor={SOLAR_COLOR} stopOpacity={0.06} />
+                </linearGradient>
+                <linearGradient id="bold-load" x1="0" x2="0" y1="0" y2="1">
+                  <stop offset="0%" stopColor={LOAD_COLOR} stopOpacity={0.38} />
+                  <stop offset="100%" stopColor={LOAD_COLOR} stopOpacity={0.04} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid stroke="var(--border)" strokeDasharray="2 4" />
               <XAxis
                 dataKey="date"
-                tick={{ fontSize: 10 }}
+                tick={{ fontSize: 10, fill: 'var(--muted-foreground)' }}
                 tickFormatter={(d: string) => d.slice(0, 7)}
                 minTickGap={40}
+                stroke="var(--border)"
               />
               <YAxis
                 yAxisId="energy"
-                tick={{ fontSize: 10 }}
+                tick={{ fontSize: 10, fill: 'var(--muted-foreground)' }}
                 width={50}
                 tickFormatter={(v: number) => fmtNumber(v, 0)}
+                stroke="var(--border)"
                 label={{
                   value: 'MWh/day',
                   angle: -90,
                   position: 'insideLeft',
-                  style: {
-                    fontSize: 10,
-                    fill: 'var(--muted-foreground)',
-                  },
+                  style: { fontSize: 10, fill: 'var(--muted-foreground)' },
                 }}
               />
               <YAxis
                 yAxisId="price"
                 orientation="right"
-                tick={{ fontSize: 10 }}
+                tick={{ fontSize: 10, fill: 'var(--muted-foreground)' }}
                 width={50}
-                tickFormatter={(v: number) => fmtNumber(v, 0)}
+                tickFormatter={(v: number) => `€${fmtNumber(v, 0)}`}
+                stroke="var(--border)"
                 label={{
                   value: '€/MWh',
                   angle: 90,
                   position: 'insideRight',
-                  style: {
-                    fontSize: 10,
-                    fill: 'var(--muted-foreground)',
-                  },
+                  style: { fontSize: 10, fill: 'var(--muted-foreground)' },
                 }}
               />
               <Tooltip
@@ -152,6 +221,8 @@ function ChartTabs({ profiles }: { profiles: ProfilesResponse }) {
                   fontSize: 11,
                   background: 'var(--popover)',
                   border: '1px solid var(--border)',
+                  borderRadius: 8,
+                  boxShadow: '0 4px 12px rgba(20, 14, 6, 0.08)',
                 }}
                 labelFormatter={(label) => `Day: ${label}`}
                 formatter={(value, name) => [
@@ -159,16 +230,14 @@ function ChartTabs({ profiles }: { profiles: ProfilesResponse }) {
                   String(name),
                 ]}
               />
-              <Legend wrapperStyle={{ fontSize: 11 }} />
               <Area
                 yAxisId="energy"
                 type="monotone"
                 dataKey="solar_mwh"
                 name="Solar (MWh/day)"
                 stroke={SOLAR_COLOR}
-                fill={SOLAR_COLOR}
-                fillOpacity={0.25}
-                strokeWidth={1}
+                fill="url(#bold-solar)"
+                strokeWidth={1.4}
               />
               <Area
                 yAxisId="energy"
@@ -176,17 +245,16 @@ function ChartTabs({ profiles }: { profiles: ProfilesResponse }) {
                 dataKey="load_mwh"
                 name="Load (MWh/day)"
                 stroke={LOAD_COLOR}
-                fill={LOAD_COLOR}
-                fillOpacity={0.15}
-                strokeWidth={1}
+                fill="url(#bold-load)"
+                strokeWidth={1.4}
               />
               <Line
                 yAxisId="price"
                 type="monotone"
                 dataKey="market_price_eur_mwh"
-                name="Spot price (€/MWh, daily mean)"
+                name="Spot price (€/MWh)"
                 stroke={PRICE_COLOR}
-                strokeWidth={1.25}
+                strokeWidth={1.8}
                 dot={false}
               />
             </ComposedChart>
@@ -194,49 +262,52 @@ function ChartTabs({ profiles }: { profiles: ProfilesResponse }) {
         </div>
       </TabsContent>
 
-      <TabsContent value="week" className="pt-3">
-        <div className="h-[360px] w-full">
+      <TabsContent value="week" className="pt-4">
+        <div className="h-[340px] w-full">
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart
               data={week}
-              margin={{ top: 10, right: 20, left: 0, bottom: 0 }}
+              margin={{ top: 10, right: 28, left: 0, bottom: 4 }}
             >
-              <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" />
+              <defs>
+                <linearGradient id="bold-solar-week" x1="0" x2="0" y1="0" y2="1">
+                  <stop offset="0%" stopColor={SOLAR_COLOR} stopOpacity={0.55} />
+                  <stop offset="100%" stopColor={SOLAR_COLOR} stopOpacity={0.05} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid stroke="var(--border)" strokeDasharray="2 4" />
               <XAxis
                 dataKey="hour"
-                tick={{ fontSize: 10 }}
+                tick={{ fontSize: 10, fill: 'var(--muted-foreground)' }}
                 tickFormatter={(h: number) => `${Math.floor(h / 24)}d`}
                 minTickGap={20}
+                stroke="var(--border)"
               />
               <YAxis
                 yAxisId="energy"
-                tick={{ fontSize: 10 }}
+                tick={{ fontSize: 10, fill: 'var(--muted-foreground)' }}
                 width={50}
                 tickFormatter={(v: number) => fmtNumber(v, 0)}
+                stroke="var(--border)"
                 label={{
                   value: 'MWh/h',
                   angle: -90,
                   position: 'insideLeft',
-                  style: {
-                    fontSize: 10,
-                    fill: 'var(--muted-foreground)',
-                  },
+                  style: { fontSize: 10, fill: 'var(--muted-foreground)' },
                 }}
               />
               <YAxis
                 yAxisId="price"
                 orientation="right"
-                tick={{ fontSize: 10 }}
+                tick={{ fontSize: 10, fill: 'var(--muted-foreground)' }}
                 width={50}
-                tickFormatter={(v: number) => fmtNumber(v, 0)}
+                tickFormatter={(v: number) => `€${fmtNumber(v, 0)}`}
+                stroke="var(--border)"
                 label={{
                   value: '€/MWh',
                   angle: 90,
                   position: 'insideRight',
-                  style: {
-                    fontSize: 10,
-                    fill: 'var(--muted-foreground)',
-                  },
+                  style: { fontSize: 10, fill: 'var(--muted-foreground)' },
                 }}
               />
               <Tooltip
@@ -244,6 +315,8 @@ function ChartTabs({ profiles }: { profiles: ProfilesResponse }) {
                   fontSize: 11,
                   background: 'var(--popover)',
                   border: '1px solid var(--border)',
+                  borderRadius: 8,
+                  boxShadow: '0 4px 12px rgba(20, 14, 6, 0.08)',
                 }}
                 labelFormatter={(_, payload) =>
                   payload?.[0]?.payload?.timestamp ?? ''
@@ -253,16 +326,14 @@ function ChartTabs({ profiles }: { profiles: ProfilesResponse }) {
                   String(name),
                 ]}
               />
-              <Legend wrapperStyle={{ fontSize: 11 }} />
               <Area
                 yAxisId="energy"
                 type="monotone"
                 dataKey="solar_mwh"
                 name="Solar (MWh/h)"
                 stroke={SOLAR_COLOR}
-                fill={SOLAR_COLOR}
-                fillOpacity={0.3}
-                strokeWidth={1}
+                fill="url(#bold-solar-week)"
+                strokeWidth={1.4}
               />
               <Line
                 yAxisId="energy"
@@ -270,7 +341,7 @@ function ChartTabs({ profiles }: { profiles: ProfilesResponse }) {
                 dataKey="load_mwh"
                 name="Load (MWh/h)"
                 stroke={LOAD_COLOR}
-                strokeWidth={1}
+                strokeWidth={1.4}
                 dot={false}
               />
               <Line
@@ -279,7 +350,7 @@ function ChartTabs({ profiles }: { profiles: ProfilesResponse }) {
                 dataKey="market_price_eur_mwh"
                 name="Spot price (€/MWh)"
                 stroke={PRICE_COLOR}
-                strokeWidth={1.25}
+                strokeWidth={1.8}
                 dot={false}
               />
             </ComposedChart>

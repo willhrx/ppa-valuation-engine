@@ -9,13 +9,7 @@ import {
   type SortingState,
 } from '@tanstack/react-table'
 
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import {
   Table,
   TableBody,
@@ -53,6 +47,18 @@ const PRICING_LABELS: Record<string, string> = {
   Floating: 'Floating',
 }
 
+const SUPPLY_COLOR: Record<string, string> = {
+  PayAsProduced: 'var(--solar)',
+  PayAsNominated: 'var(--load)',
+  Baseload: 'var(--price)',
+}
+
+const SUPPLY_LETTER: Record<string, string> = {
+  PayAsProduced: 'P',
+  PayAsNominated: 'N',
+  Baseload: 'B',
+}
+
 const columnHelper = createColumnHelper<ValuationRow>()
 
 export function ValuationMatrixTable({
@@ -68,28 +74,32 @@ export function ValuationMatrixTable({
   )
 
   return (
-    <Card className="h-full">
-      <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-3">
+    <Card className="h-full p-0">
+      <div className="flex items-start justify-between gap-4 border-b px-6 pt-5 pb-4">
         <div>
-          <CardTitle className="text-sm">Valuation matrix</CardTitle>
-          <CardDescription className="text-xs">
-            12 supply × pricing combinations at the central scenario, base
-            strike <span className="font-mono">{baseStrike.toFixed(1)} €/MWh</span>.
-          </CardDescription>
+          <div className="text-sm font-semibold tracking-[-0.005em]">
+            Valuation matrix
+          </div>
+          <p className="mt-1 text-[11.5px] text-muted-foreground">
+            12 supply × pricing combinations · base strike{' '}
+            <span className="font-mono font-semibold text-foreground">
+              €{baseStrike.toFixed(1)}/MWh
+            </span>
+          </p>
         </div>
         {state.status === 'success' && (
           <button
             type="button"
-            className="text-[10px] text-muted-foreground underline-offset-2 hover:underline"
+            className="text-[11px] text-muted-foreground underline-offset-2 hover:underline"
             onClick={refetch}
           >
             refresh
           </button>
         )}
-      </CardHeader>
-      <CardContent>
+      </div>
+      <CardContent className="p-0">
         {state.status === 'idle' && (
-          <p className="text-xs text-muted-foreground">
+          <p className="px-6 py-4 text-xs text-muted-foreground">
             Apply a configuration to compute the matrix.
           </p>
         )}
@@ -103,33 +113,58 @@ export function ValuationMatrixTable({
   )
 }
 
+function SupplyChip({ supply }: { supply: string }) {
+  const color = SUPPLY_COLOR[supply] ?? 'var(--muted-foreground)'
+  const letter = SUPPLY_LETTER[supply] ?? '·'
+  return (
+    <span
+      className="inline-flex h-5 w-5 items-center justify-center rounded-[5px] text-[10px] font-bold text-white"
+      style={{
+        background: color,
+        boxShadow: `0 1px 2px color-mix(in oklch, ${color} 30%, transparent)`,
+      }}
+    >
+      {letter}
+    </span>
+  )
+}
+
 function Matrix({ rows }: { rows: ValuationRow[] }) {
   const [sorting, setSorting] = useState<SortingState>([
     { id: 'producer_npv', desc: true },
   ])
+
+  const npvMax = useMemo(
+    () => Math.max(1, ...rows.map((r) => Math.abs(r.producer_npv))),
+    [rows],
+  )
 
   const columns = useMemo(
     () => [
       columnHelper.accessor('supply_structure', {
         header: 'Supply',
         cell: (info) => (
-          <span className="font-medium">
+          <span className="inline-flex items-center gap-2 font-medium">
+            <SupplyChip supply={info.getValue()} />
             {SUPPLY_LABELS[info.getValue()] ?? info.getValue()}
           </span>
         ),
       }),
       columnHelper.accessor('pricing_structure', {
         header: 'Pricing',
-        cell: (info) =>
-          PRICING_LABELS[info.getValue()] ?? info.getValue(),
+        cell: (info) => (
+          <span style={{ color: 'var(--text-soft)' }}>
+            {PRICING_LABELS[info.getValue()] ?? info.getValue()}
+          </span>
+        ),
       }),
       columnHelper.accessor('producer_npv', {
         header: 'Producer NPV',
         cell: (info) => (
           <span
             className={cn(
-              'font-mono tabular-nums',
-              info.getValue() < 0 ? 'text-destructive' : '',
+              'font-mono font-semibold tabular-nums',
+              info.getValue() < 0 && 'text-[color:var(--negative)]',
             )}
           >
             {fmtEurMillion(info.getValue())}
@@ -139,7 +174,10 @@ function Matrix({ rows }: { rows: ValuationRow[] }) {
       columnHelper.accessor('average_strike_eur_mwh', {
         header: 'Avg strike',
         cell: (info) => (
-          <span className="font-mono tabular-nums">
+          <span
+            className="font-mono tabular-nums"
+            style={{ color: 'var(--text-soft)' }}
+          >
             {fmtEurPerMwh(info.getValue())}
           </span>
         ),
@@ -147,7 +185,10 @@ function Matrix({ rows }: { rows: ValuationRow[] }) {
       columnHelper.accessor('capture_rate', {
         header: 'Capture',
         cell: (info) => (
-          <span className="font-mono tabular-nums">
+          <span
+            className="font-mono tabular-nums"
+            style={{ color: 'var(--text-soft)' }}
+          >
             {fmtPercent(info.getValue())}
           </span>
         ),
@@ -155,31 +196,33 @@ function Matrix({ rows }: { rows: ValuationRow[] }) {
       columnHelper.accessor('total_volume_mwh', {
         header: 'Volume',
         cell: (info) => (
-          <span className="font-mono tabular-nums">
+          <span
+            className="font-mono tabular-nums"
+            style={{ color: 'var(--text-soft)' }}
+          >
             {fmtGwh(info.getValue())}
-          </span>
-        ),
-      }),
-      columnHelper.accessor('volume_value', {
-        header: 'Volume value',
-        cell: (info) => (
-          <span className="font-mono tabular-nums">
-            {fmtEurMillion(info.getValue())}
           </span>
         ),
       }),
       columnHelper.accessor('profile_value', {
         header: 'Profile value',
-        cell: (info) => (
-          <span
-            className={cn(
-              'font-mono tabular-nums',
-              info.getValue() < 0 ? 'text-destructive' : '',
-            )}
-          >
-            {fmtEurMillion(info.getValue())}
-          </span>
-        ),
+        cell: (info) => {
+          const v = info.getValue()
+          const isNeg = v < 0
+          return (
+            <span
+              className="inline-block rounded-md px-2 py-0.5 font-mono text-[11.5px] font-semibold tabular-nums"
+              style={{
+                background: isNeg
+                  ? 'var(--negative-soft)'
+                  : 'var(--positive-soft)',
+                color: isNeg ? 'var(--negative)' : 'var(--positive)',
+              }}
+            >
+              {fmtEurMillion(v)}
+            </span>
+          )
+        },
       }),
     ],
     [],
@@ -194,21 +237,34 @@ function Matrix({ rows }: { rows: ValuationRow[] }) {
     getSortedRowModel: getSortedRowModel(),
   })
 
+  const sorted = table.getRowModel().rows
+  const bestId = sorted[0]?.id
+  const worstId = sorted[sorted.length - 1]?.id
+
   return (
-    <div className="max-h-[420px] overflow-auto rounded-md border">
+    <div className="max-h-[460px] overflow-auto">
       <Table className="text-xs">
-        <TableHeader className="sticky top-0 bg-background">
+        <TableHeader className="sticky top-0 z-10">
           {table.getHeaderGroups().map((group) => (
-            <TableRow key={group.id}>
-              {group.headers.map((header) => {
+            <TableRow key={group.id} className="border-b">
+              {group.headers.map((header, idx) => {
                 const sort = header.column.getIsSorted()
+                const numeric = idx >= 2
                 return (
                   <TableHead
                     key={header.id}
                     onClick={header.column.getToggleSortingHandler()}
-                    className="cursor-pointer select-none whitespace-nowrap text-[11px] font-semibold uppercase tracking-wide"
+                    className={cn(
+                      'cursor-pointer bg-[color:var(--surface-alt)] px-4 py-2.5 text-[10px] font-bold tracking-[0.08em] uppercase text-muted-foreground select-none',
+                      numeric && 'text-right',
+                    )}
                   >
-                    <span className="inline-flex items-center gap-1">
+                    <span
+                      className={cn(
+                        'inline-flex items-center gap-1',
+                        numeric && 'justify-end',
+                      )}
+                    >
                       {flexRender(
                         header.column.columnDef.header,
                         header.getContext(),
@@ -219,19 +275,86 @@ function Matrix({ rows }: { rows: ValuationRow[] }) {
                   </TableHead>
                 )
               })}
+              <TableHead className="bg-[color:var(--surface-alt)] px-4 py-2.5 text-right text-[10px] font-bold tracking-[0.08em] uppercase text-muted-foreground">
+                Rank
+              </TableHead>
             </TableRow>
           ))}
         </TableHeader>
         <TableBody>
-          {table.getRowModel().rows.map((row) => (
-            <TableRow key={row.id} className="hover:bg-muted/40">
-              {row.getVisibleCells().map((cell) => (
-                <TableCell key={cell.id} className="whitespace-nowrap py-1.5">
-                  {flexRender(cell.column.columnDef.cell, cell.getContext())}
+          {sorted.map((row) => {
+            const isBest = row.id === bestId
+            const isWorst = row.id === worstId
+            const pct = Math.max(
+              0,
+              Math.min(1, row.original.producer_npv / npvMax),
+            )
+            return (
+              <TableRow
+                key={row.id}
+                className="border-b hover:bg-[color:var(--accent-soft)]/40"
+                style={
+                  isBest
+                    ? {
+                        background:
+                          'linear-gradient(90deg, color-mix(in oklch, var(--accent-soft) 80%, transparent), transparent 60%)',
+                      }
+                    : undefined
+                }
+              >
+                {row.getVisibleCells().map((cell, idx) => {
+                  const numeric = idx >= 2
+                  return (
+                    <TableCell
+                      key={cell.id}
+                      className={cn(
+                        'whitespace-nowrap px-4 py-3',
+                        numeric && 'text-right',
+                      )}
+                    >
+                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                    </TableCell>
+                  )
+                })}
+                <TableCell className="px-4 py-3" style={{ width: 180 }}>
+                  <div className="flex items-center gap-2">
+                    <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-[color:var(--surface-alt)]">
+                      <div
+                        className="h-full rounded-full"
+                        style={{
+                          width: `${pct * 100}%`,
+                          background: isBest
+                            ? 'linear-gradient(90deg, var(--accent), var(--solar-deep))'
+                            : isWorst
+                              ? 'var(--negative)'
+                              : 'var(--text-soft)',
+                        }}
+                      />
+                    </div>
+                    {isBest && (
+                      <span
+                        className="rounded-[4px] px-1.5 py-0.5 text-[10px] font-bold tracking-[0.04em] text-white"
+                        style={{ background: 'var(--accent)' }}
+                      >
+                        BEST
+                      </span>
+                    )}
+                    {isWorst && (
+                      <span
+                        className="rounded-[4px] px-1.5 py-0.5 text-[10px] font-bold tracking-[0.04em]"
+                        style={{
+                          background: 'var(--negative-soft)',
+                          color: 'var(--negative)',
+                        }}
+                      >
+                        WORST
+                      </span>
+                    )}
+                  </div>
                 </TableCell>
-              ))}
-            </TableRow>
-          ))}
+              </TableRow>
+            )
+          })}
         </TableBody>
       </Table>
     </div>
