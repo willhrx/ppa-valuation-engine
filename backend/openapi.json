@@ -1,0 +1,2447 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "PPA Valuation Engine API",
+    "description": "Dutch renewable energy PPA valuation and asset optimisation",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/api/config/defaults": {
+      "get": {
+        "tags": [
+          "config"
+        ],
+        "summary": "Config Defaults",
+        "description": "Return a fresh PPAConfig with engine defaults, used to seed the UI form.",
+        "operationId": "config_defaults_api_config_defaults_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PPAConfigSchema"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/config/validate": {
+      "post": {
+        "tags": [
+          "config"
+        ],
+        "summary": "Config Validate",
+        "description": "Run the engine's domain validation on the submitted config.\n\nPydantic handles per-field bounds at parse time; this endpoint additionally\nruns `PPAConfig.validate()` which checks cross-field invariants (e.g. that\ndeal.start_date is strictly before deal.end_date).\n\nReturns the validated config unchanged on success; 422 with the engine's\nerror message on failure.",
+        "operationId": "config_validate_api_config_validate_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PPAConfigSchema"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PPAConfigSchema"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/profiles": {
+      "post": {
+        "tags": [
+          "profiles"
+        ],
+        "summary": "Central Profiles",
+        "description": "Generate the central-scenario hourly profiles over the full deal horizon.\n\nReturns three aligned series (solar production, market price, consumer load)\nat the seeds configured in `config.solar.seed` and `config.market.seed`.\n\nPayload size at default config: ~87,600 hourly rows \u00d7 3 series.",
+        "operationId": "central_profiles_api_profiles_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PPAConfigSchema"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfilesResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/preview": {
+      "post": {
+        "tags": [
+          "preview"
+        ],
+        "summary": "Preview Central Scenario",
+        "operationId": "preview_central_scenario_api_preview_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PPAConfigSchema"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PreviewResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/valuation/matrix": {
+      "post": {
+        "tags": [
+          "valuation"
+        ],
+        "summary": "Valuation Matrix",
+        "operationId": "valuation_matrix_api_valuation_matrix_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ValuationMatrixRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValuationMatrixResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/simulate": {
+      "post": {
+        "tags": [
+          "simulation"
+        ],
+        "summary": "Run Simulation",
+        "operationId": "run_simulation_api_simulate_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SimulationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MonteCarloResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/solver/negotiation-range": {
+      "post": {
+        "tags": [
+          "solver"
+        ],
+        "summary": "Negotiation Range",
+        "operationId": "negotiation_range_api_solver_negotiation_range_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NegotiationRangeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NegotiationRangeResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/solver/tornado": {
+      "post": {
+        "tags": [
+          "solver"
+        ],
+        "summary": "Tornado",
+        "operationId": "tornado_api_solver_tornado_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TornadoRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TornadoResultSchema"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/solver/fair-strike": {
+      "post": {
+        "tags": [
+          "solver"
+        ],
+        "summary": "Fair Strike",
+        "operationId": "fair_strike_api_solver_fair_strike_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FairStrikeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FairStrikeResultSchema"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/health": {
+      "get": {
+        "tags": [
+          "health"
+        ],
+        "summary": "Health",
+        "operationId": "health_api_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Health Api Health Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ComboRiskSummarySchema": {
+        "properties": {
+          "supply_structure": {
+            "type": "string",
+            "title": "Supply Structure"
+          },
+          "pricing_structure": {
+            "type": "string",
+            "title": "Pricing Structure"
+          },
+          "central_producer_npv": {
+            "type": "number",
+            "title": "Central Producer Npv"
+          },
+          "central_capture_rate": {
+            "type": "number",
+            "title": "Central Capture Rate"
+          },
+          "joint": {
+            "$ref": "#/components/schemas/PathDistributionSchema"
+          },
+          "price_only": {
+            "$ref": "#/components/schemas/PathDistributionSchema"
+          },
+          "volume_only": {
+            "$ref": "#/components/schemas/PathDistributionSchema"
+          },
+          "variance_decomp": {
+            "$ref": "#/components/schemas/VarianceDecompositionSchema"
+          }
+        },
+        "type": "object",
+        "required": [
+          "supply_structure",
+          "pricing_structure",
+          "central_producer_npv",
+          "central_capture_rate",
+          "joint",
+          "price_only",
+          "volume_only",
+          "variance_decomp"
+        ],
+        "title": "ComboRiskSummarySchema"
+      },
+      "ConsumerLoadConfigSchema": {
+        "properties": {
+          "annual_consumption_gwh": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "Annual Consumption Gwh",
+            "default": 100.0
+          },
+          "seasonal_amplitude": {
+            "type": "number",
+            "title": "Seasonal Amplitude",
+            "default": 0.15
+          },
+          "seasonal_peak_day": {
+            "type": "integer",
+            "title": "Seasonal Peak Day",
+            "default": 15
+          },
+          "weekday_hourly_shape": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "maxItems": 24,
+            "minItems": 24,
+            "title": "Weekday Hourly Shape",
+            "default": [
+              0.55,
+              0.5,
+              0.48,
+              0.48,
+              0.52,
+              0.62,
+              0.78,
+              0.9,
+              0.98,
+              1.02,
+              1.1,
+              1.06,
+              1.0,
+              1.02,
+              1.0,
+              1.02,
+              1.05,
+              1.08,
+              1.1,
+              1.04,
+              0.92,
+              0.8,
+              0.7,
+              0.6
+            ]
+          },
+          "weekend_hourly_shape": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "maxItems": 24,
+            "minItems": 24,
+            "title": "Weekend Hourly Shape",
+            "default": [
+              0.55,
+              0.5,
+              0.48,
+              0.48,
+              0.5,
+              0.58,
+              0.68,
+              0.78,
+              0.85,
+              0.9,
+              0.92,
+              0.9,
+              0.88,
+              0.85,
+              0.83,
+              0.83,
+              0.85,
+              0.88,
+              0.88,
+              0.83,
+              0.75,
+              0.68,
+              0.62,
+              0.58
+            ]
+          },
+          "noise_sigma": {
+            "type": "number",
+            "title": "Noise Sigma",
+            "default": 0.05
+          },
+          "seed": {
+            "type": "integer",
+            "title": "Seed",
+            "default": 42
+          }
+        },
+        "type": "object",
+        "title": "ConsumerLoadConfigSchema"
+      },
+      "DealConfigSchema": {
+        "properties": {
+          "start_date": {
+            "type": "string",
+            "title": "Start Date",
+            "default": "2027-01-01"
+          },
+          "end_date": {
+            "type": "string",
+            "title": "End Date",
+            "default": "2036-12-31"
+          },
+          "currency": {
+            "type": "string",
+            "title": "Currency",
+            "default": "EUR"
+          },
+          "discount_rate": {
+            "type": "number",
+            "exclusiveMaximum": 0.3,
+            "exclusiveMinimum": 0.0,
+            "title": "Discount Rate",
+            "default": 0.06
+          }
+        },
+        "type": "object",
+        "title": "DealConfigSchema"
+      },
+      "FairStrikeRequest": {
+        "properties": {
+          "config": {
+            "$ref": "#/components/schemas/PPAConfigSchema",
+            "default": {
+              "location": {
+                "altitude": 10.0,
+                "lat": 52.1,
+                "lon": 5.1,
+                "tz": "Europe/Amsterdam"
+              },
+              "solar": {
+                "azimuth_deg": 180.0,
+                "capacity_mw": 50.0,
+                "cloud_factor_logit_scale": 0.7,
+                "cloud_factor_phi": 0.9,
+                "degradation_rate": 0.005,
+                "monthly_cloud_means": [
+                  0.38,
+                  0.42,
+                  0.5,
+                  0.57,
+                  0.63,
+                  0.68,
+                  0.68,
+                  0.65,
+                  0.58,
+                  0.5,
+                  0.42,
+                  0.36
+                ],
+                "performance_ratio": 0.8,
+                "seed": 42,
+                "tilt_deg": 35.0
+              },
+              "market": {
+                "ar1_phi": 0.7,
+                "ar1_sigma": 8.0,
+                "base_price": 80.0,
+                "cannibalisation_alpha_2027": 55.0,
+                "cannibalisation_alpha_2036": 90.0,
+                "drift": -1.5,
+                "seasonal_amplitude": 15.0,
+                "seasonal_peak_day": 15,
+                "seed": 42,
+                "weekday_hourly_adder": [
+                  -10.0,
+                  -12.0,
+                  -14.0,
+                  -14.0,
+                  -12.0,
+                  -10.0,
+                  -8.0,
+                  8.0,
+                  20.0,
+                  14.0,
+                  8.0,
+                  2.0,
+                  -5.0,
+                  -5.0,
+                  0.0,
+                  8.0,
+                  15.0,
+                  35.0,
+                  30.0,
+                  22.0,
+                  14.0,
+                  5.0,
+                  0.0,
+                  -8.0
+                ],
+                "weekend_hourly_adder": [
+                  -12.0,
+                  -14.0,
+                  -16.0,
+                  -16.0,
+                  -14.0,
+                  -12.0,
+                  -10.0,
+                  -5.0,
+                  2.0,
+                  5.0,
+                  8.0,
+                  8.0,
+                  2.0,
+                  2.0,
+                  2.0,
+                  4.0,
+                  6.0,
+                  10.0,
+                  12.0,
+                  10.0,
+                  6.0,
+                  2.0,
+                  -2.0,
+                  -10.0
+                ]
+              },
+              "load": {
+                "annual_consumption_gwh": 100.0,
+                "noise_sigma": 0.05,
+                "seasonal_amplitude": 0.15,
+                "seasonal_peak_day": 15,
+                "seed": 42,
+                "weekday_hourly_shape": [
+                  0.55,
+                  0.5,
+                  0.48,
+                  0.48,
+                  0.52,
+                  0.62,
+                  0.78,
+                  0.9,
+                  0.98,
+                  1.02,
+                  1.1,
+                  1.06,
+                  1.0,
+                  1.02,
+                  1.0,
+                  1.02,
+                  1.05,
+                  1.08,
+                  1.1,
+                  1.04,
+                  0.92,
+                  0.8,
+                  0.7,
+                  0.6
+                ],
+                "weekend_hourly_shape": [
+                  0.55,
+                  0.5,
+                  0.48,
+                  0.48,
+                  0.5,
+                  0.58,
+                  0.68,
+                  0.78,
+                  0.85,
+                  0.9,
+                  0.92,
+                  0.9,
+                  0.88,
+                  0.85,
+                  0.83,
+                  0.83,
+                  0.85,
+                  0.88,
+                  0.88,
+                  0.83,
+                  0.75,
+                  0.68,
+                  0.62,
+                  0.58
+                ]
+              },
+              "deal": {
+                "currency": "EUR",
+                "discount_rate": 0.06,
+                "end_date": "2036-12-31",
+                "start_date": "2027-01-01"
+              }
+            }
+          },
+          "structure_a": {
+            "type": "string",
+            "enum": [
+              "pay_as_produced",
+              "pay_as_nominated",
+              "baseload"
+            ],
+            "title": "Structure A",
+            "default": "pay_as_produced"
+          },
+          "structure_b": {
+            "type": "string",
+            "enum": [
+              "pay_as_produced",
+              "pay_as_nominated",
+              "baseload"
+            ],
+            "title": "Structure B",
+            "default": "baseload"
+          },
+          "pricing_structure": {
+            "type": "string",
+            "enum": [
+              "fixed_flat",
+              "fixed_escalated"
+            ],
+            "title": "Pricing Structure",
+            "default": "fixed_flat"
+          },
+          "strike_a": {
+            "type": "number",
+            "title": "Strike A",
+            "default": 65.0
+          },
+          "n_paths": {
+            "type": "integer",
+            "title": "N Paths",
+            "default": 200
+          }
+        },
+        "type": "object",
+        "title": "FairStrikeRequest"
+      },
+      "FairStrikeResultSchema": {
+        "properties": {
+          "structure_a": {
+            "type": "string",
+            "title": "Structure A"
+          },
+          "structure_b": {
+            "type": "string",
+            "title": "Structure B"
+          },
+          "strike_a": {
+            "type": "number",
+            "title": "Strike A"
+          },
+          "fair_strike_b": {
+            "type": "number",
+            "title": "Fair Strike B"
+          },
+          "p50_npv_a": {
+            "type": "number",
+            "title": "P50 Npv A"
+          },
+          "p50_npv_b": {
+            "type": "number",
+            "title": "P50 Npv B"
+          },
+          "pricing_structure": {
+            "type": "string",
+            "title": "Pricing Structure"
+          },
+          "n_paths": {
+            "type": "integer",
+            "title": "N Paths"
+          }
+        },
+        "type": "object",
+        "required": [
+          "structure_a",
+          "structure_b",
+          "strike_a",
+          "fair_strike_b",
+          "p50_npv_a",
+          "p50_npv_b",
+          "pricing_structure",
+          "n_paths"
+        ],
+        "title": "FairStrikeResultSchema"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "LocationConfigSchema": {
+        "properties": {
+          "lat": {
+            "type": "number",
+            "title": "Lat",
+            "default": 52.1
+          },
+          "lon": {
+            "type": "number",
+            "title": "Lon",
+            "default": 5.1
+          },
+          "tz": {
+            "type": "string",
+            "title": "Tz",
+            "default": "Europe/Amsterdam"
+          },
+          "altitude": {
+            "type": "number",
+            "title": "Altitude",
+            "default": 10.0
+          }
+        },
+        "type": "object",
+        "title": "LocationConfigSchema"
+      },
+      "MarketPriceConfigSchema": {
+        "properties": {
+          "base_price": {
+            "type": "number",
+            "title": "Base Price",
+            "default": 80.0
+          },
+          "drift": {
+            "type": "number",
+            "title": "Drift",
+            "default": -1.5
+          },
+          "seasonal_amplitude": {
+            "type": "number",
+            "title": "Seasonal Amplitude",
+            "default": 15.0
+          },
+          "seasonal_peak_day": {
+            "type": "integer",
+            "title": "Seasonal Peak Day",
+            "default": 15
+          },
+          "weekday_hourly_adder": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "maxItems": 24,
+            "minItems": 24,
+            "title": "Weekday Hourly Adder",
+            "default": [
+              -10,
+              -12,
+              -14,
+              -14,
+              -12,
+              -10,
+              -8,
+              8,
+              20,
+              14,
+              8,
+              2,
+              -5,
+              -5,
+              0,
+              8,
+              15,
+              35,
+              30,
+              22,
+              14,
+              5,
+              0,
+              -8
+            ]
+          },
+          "weekend_hourly_adder": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "maxItems": 24,
+            "minItems": 24,
+            "title": "Weekend Hourly Adder",
+            "default": [
+              -12,
+              -14,
+              -16,
+              -16,
+              -14,
+              -12,
+              -10,
+              -5,
+              2,
+              5,
+              8,
+              8,
+              2,
+              2,
+              2,
+              4,
+              6,
+              10,
+              12,
+              10,
+              6,
+              2,
+              -2,
+              -10
+            ]
+          },
+          "cannibalisation_alpha_2027": {
+            "type": "number",
+            "title": "Cannibalisation Alpha 2027",
+            "default": 55.0
+          },
+          "cannibalisation_alpha_2036": {
+            "type": "number",
+            "title": "Cannibalisation Alpha 2036",
+            "default": 90.0
+          },
+          "ar1_phi": {
+            "type": "number",
+            "title": "Ar1 Phi",
+            "default": 0.7
+          },
+          "ar1_sigma": {
+            "type": "number",
+            "title": "Ar1 Sigma",
+            "default": 8.0
+          },
+          "seed": {
+            "type": "integer",
+            "title": "Seed",
+            "default": 42
+          }
+        },
+        "type": "object",
+        "title": "MarketPriceConfigSchema"
+      },
+      "MonteCarloPathRow": {
+        "properties": {
+          "mode": {
+            "type": "string",
+            "title": "Mode"
+          },
+          "path": {
+            "type": "integer",
+            "title": "Path"
+          },
+          "supply_structure": {
+            "type": "string",
+            "title": "Supply Structure"
+          },
+          "pricing_structure": {
+            "type": "string",
+            "title": "Pricing Structure"
+          },
+          "producer_npv": {
+            "type": "number",
+            "title": "Producer Npv"
+          },
+          "consumer_npv": {
+            "type": "number",
+            "title": "Consumer Npv"
+          },
+          "total_volume_mwh": {
+            "type": "number",
+            "title": "Total Volume Mwh"
+          },
+          "average_strike_eur_mwh": {
+            "type": "number",
+            "title": "Average Strike Eur Mwh"
+          },
+          "capture_rate": {
+            "type": "number",
+            "title": "Capture Rate"
+          },
+          "volume_value": {
+            "type": "number",
+            "title": "Volume Value"
+          },
+          "profile_value": {
+            "type": "number",
+            "title": "Profile Value"
+          }
+        },
+        "type": "object",
+        "required": [
+          "mode",
+          "path",
+          "supply_structure",
+          "pricing_structure",
+          "producer_npv",
+          "consumer_npv",
+          "total_volume_mwh",
+          "average_strike_eur_mwh",
+          "capture_rate",
+          "volume_value",
+          "profile_value"
+        ],
+        "title": "MonteCarloPathRow"
+      },
+      "MonteCarloResponse": {
+        "properties": {
+          "paths": {
+            "items": {
+              "$ref": "#/components/schemas/MonteCarloPathRow"
+            },
+            "type": "array",
+            "title": "Paths"
+          },
+          "central_rows": {
+            "items": {
+              "$ref": "#/components/schemas/ValuationRowSchema"
+            },
+            "type": "array",
+            "title": "Central Rows"
+          },
+          "risk_summary": {
+            "$ref": "#/components/schemas/RiskSummarySchema"
+          },
+          "n_paths": {
+            "type": "integer",
+            "title": "N Paths"
+          },
+          "base_strike": {
+            "type": "number",
+            "title": "Base Strike"
+          },
+          "elapsed_seconds": {
+            "type": "number",
+            "title": "Elapsed Seconds"
+          }
+        },
+        "type": "object",
+        "required": [
+          "paths",
+          "central_rows",
+          "risk_summary",
+          "n_paths",
+          "base_strike",
+          "elapsed_seconds"
+        ],
+        "title": "MonteCarloResponse"
+      },
+      "NegotiationRangeRequest": {
+        "properties": {
+          "config": {
+            "$ref": "#/components/schemas/PPAConfigSchema",
+            "default": {
+              "location": {
+                "altitude": 10.0,
+                "lat": 52.1,
+                "lon": 5.1,
+                "tz": "Europe/Amsterdam"
+              },
+              "solar": {
+                "azimuth_deg": 180.0,
+                "capacity_mw": 50.0,
+                "cloud_factor_logit_scale": 0.7,
+                "cloud_factor_phi": 0.9,
+                "degradation_rate": 0.005,
+                "monthly_cloud_means": [
+                  0.38,
+                  0.42,
+                  0.5,
+                  0.57,
+                  0.63,
+                  0.68,
+                  0.68,
+                  0.65,
+                  0.58,
+                  0.5,
+                  0.42,
+                  0.36
+                ],
+                "performance_ratio": 0.8,
+                "seed": 42,
+                "tilt_deg": 35.0
+              },
+              "market": {
+                "ar1_phi": 0.7,
+                "ar1_sigma": 8.0,
+                "base_price": 80.0,
+                "cannibalisation_alpha_2027": 55.0,
+                "cannibalisation_alpha_2036": 90.0,
+                "drift": -1.5,
+                "seasonal_amplitude": 15.0,
+                "seasonal_peak_day": 15,
+                "seed": 42,
+                "weekday_hourly_adder": [
+                  -10.0,
+                  -12.0,
+                  -14.0,
+                  -14.0,
+                  -12.0,
+                  -10.0,
+                  -8.0,
+                  8.0,
+                  20.0,
+                  14.0,
+                  8.0,
+                  2.0,
+                  -5.0,
+                  -5.0,
+                  0.0,
+                  8.0,
+                  15.0,
+                  35.0,
+                  30.0,
+                  22.0,
+                  14.0,
+                  5.0,
+                  0.0,
+                  -8.0
+                ],
+                "weekend_hourly_adder": [
+                  -12.0,
+                  -14.0,
+                  -16.0,
+                  -16.0,
+                  -14.0,
+                  -12.0,
+                  -10.0,
+                  -5.0,
+                  2.0,
+                  5.0,
+                  8.0,
+                  8.0,
+                  2.0,
+                  2.0,
+                  2.0,
+                  4.0,
+                  6.0,
+                  10.0,
+                  12.0,
+                  10.0,
+                  6.0,
+                  2.0,
+                  -2.0,
+                  -10.0
+                ]
+              },
+              "load": {
+                "annual_consumption_gwh": 100.0,
+                "noise_sigma": 0.05,
+                "seasonal_amplitude": 0.15,
+                "seasonal_peak_day": 15,
+                "seed": 42,
+                "weekday_hourly_shape": [
+                  0.55,
+                  0.5,
+                  0.48,
+                  0.48,
+                  0.52,
+                  0.62,
+                  0.78,
+                  0.9,
+                  0.98,
+                  1.02,
+                  1.1,
+                  1.06,
+                  1.0,
+                  1.02,
+                  1.0,
+                  1.02,
+                  1.05,
+                  1.08,
+                  1.1,
+                  1.04,
+                  0.92,
+                  0.8,
+                  0.7,
+                  0.6
+                ],
+                "weekend_hourly_shape": [
+                  0.55,
+                  0.5,
+                  0.48,
+                  0.48,
+                  0.5,
+                  0.58,
+                  0.68,
+                  0.78,
+                  0.85,
+                  0.9,
+                  0.92,
+                  0.9,
+                  0.88,
+                  0.85,
+                  0.83,
+                  0.83,
+                  0.85,
+                  0.88,
+                  0.88,
+                  0.83,
+                  0.75,
+                  0.68,
+                  0.62,
+                  0.58
+                ]
+              },
+              "deal": {
+                "currency": "EUR",
+                "discount_rate": 0.06,
+                "end_date": "2036-12-31",
+                "start_date": "2027-01-01"
+              }
+            }
+          },
+          "target_producer_npv": {
+            "type": "number",
+            "title": "Target Producer Npv",
+            "default": 0.0
+          }
+        },
+        "type": "object",
+        "title": "NegotiationRangeRequest"
+      },
+      "NegotiationRangeResponse": {
+        "properties": {
+          "ranges": {
+            "items": {
+              "$ref": "#/components/schemas/NegotiationRangeSchema"
+            },
+            "type": "array",
+            "title": "Ranges"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ranges"
+        ],
+        "title": "NegotiationRangeResponse"
+      },
+      "NegotiationRangeSchema": {
+        "properties": {
+          "supply_structure": {
+            "type": "string",
+            "title": "Supply Structure"
+          },
+          "producer_floor": {
+            "$ref": "#/components/schemas/SolverResultSchema"
+          },
+          "consumer_ceiling": {
+            "$ref": "#/components/schemas/SolverResultSchema"
+          },
+          "midpoint": {
+            "type": "number",
+            "title": "Midpoint"
+          },
+          "spread_eur_mwh": {
+            "type": "number",
+            "title": "Spread Eur Mwh"
+          }
+        },
+        "type": "object",
+        "required": [
+          "supply_structure",
+          "producer_floor",
+          "consumer_ceiling",
+          "midpoint",
+          "spread_eur_mwh"
+        ],
+        "title": "NegotiationRangeSchema"
+      },
+      "PPAConfigSchema": {
+        "properties": {
+          "location": {
+            "$ref": "#/components/schemas/LocationConfigSchema"
+          },
+          "solar": {
+            "$ref": "#/components/schemas/SolarConfigSchema"
+          },
+          "market": {
+            "$ref": "#/components/schemas/MarketPriceConfigSchema"
+          },
+          "load": {
+            "$ref": "#/components/schemas/ConsumerLoadConfigSchema"
+          },
+          "deal": {
+            "$ref": "#/components/schemas/DealConfigSchema"
+          }
+        },
+        "type": "object",
+        "title": "PPAConfigSchema"
+      },
+      "PathDistributionSchema": {
+        "properties": {
+          "mean": {
+            "type": "number",
+            "title": "Mean"
+          },
+          "std": {
+            "type": "number",
+            "title": "Std"
+          },
+          "p10": {
+            "type": "number",
+            "title": "P10"
+          },
+          "p50": {
+            "type": "number",
+            "title": "P50"
+          },
+          "p90": {
+            "type": "number",
+            "title": "P90"
+          },
+          "var_95": {
+            "type": "number",
+            "title": "Var 95"
+          },
+          "es_95": {
+            "type": "number",
+            "title": "Es 95"
+          },
+          "prob_negative": {
+            "type": "number",
+            "title": "Prob Negative"
+          }
+        },
+        "type": "object",
+        "required": [
+          "mean",
+          "std",
+          "p10",
+          "p50",
+          "p90",
+          "var_95",
+          "es_95",
+          "prob_negative"
+        ],
+        "title": "PathDistributionSchema"
+      },
+      "PreviewResponse": {
+        "properties": {
+          "solar_annual_yield_kwh_per_kwp": {
+            "type": "number",
+            "title": "Solar Annual Yield Kwh Per Kwp"
+          },
+          "solar_total_gwh": {
+            "type": "number",
+            "title": "Solar Total Gwh"
+          },
+          "avg_price_eur_mwh": {
+            "type": "number",
+            "title": "Avg Price Eur Mwh"
+          },
+          "total_load_gwh": {
+            "type": "number",
+            "title": "Total Load Gwh"
+          },
+          "hedge_ratio": {
+            "type": "number",
+            "title": "Hedge Ratio"
+          },
+          "capture_rate": {
+            "type": "number",
+            "title": "Capture Rate"
+          },
+          "sample_week_solar": {
+            "items": {
+              "$ref": "#/components/schemas/TimeSeriesPoint"
+            },
+            "type": "array",
+            "title": "Sample Week Solar"
+          },
+          "sample_week_prices": {
+            "items": {
+              "$ref": "#/components/schemas/TimeSeriesPoint"
+            },
+            "type": "array",
+            "title": "Sample Week Prices"
+          },
+          "sample_week_load": {
+            "items": {
+              "$ref": "#/components/schemas/TimeSeriesPoint"
+            },
+            "type": "array",
+            "title": "Sample Week Load"
+          }
+        },
+        "type": "object",
+        "required": [
+          "solar_annual_yield_kwh_per_kwp",
+          "solar_total_gwh",
+          "avg_price_eur_mwh",
+          "total_load_gwh",
+          "hedge_ratio",
+          "capture_rate",
+          "sample_week_solar",
+          "sample_week_prices",
+          "sample_week_load"
+        ],
+        "title": "PreviewResponse"
+      },
+      "ProfilesResponse": {
+        "properties": {
+          "timestamps": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Timestamps"
+          },
+          "solar_mwh": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Solar Mwh"
+          },
+          "market_price_eur_mwh": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Market Price Eur Mwh"
+          },
+          "load_mwh": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Load Mwh"
+          },
+          "n_hours": {
+            "type": "integer",
+            "title": "N Hours"
+          },
+          "timezone": {
+            "type": "string",
+            "title": "Timezone"
+          }
+        },
+        "type": "object",
+        "required": [
+          "timestamps",
+          "solar_mwh",
+          "market_price_eur_mwh",
+          "load_mwh",
+          "n_hours",
+          "timezone"
+        ],
+        "title": "ProfilesResponse",
+        "description": "Full-horizon raw hourly series (column-oriented).\n\nAll four lists have identical length (n_hours over the deal horizon).\ntimestamps are ISO 8601 with timezone (Europe/Amsterdam)."
+      },
+      "RiskSummarySchema": {
+        "properties": {
+          "combinations": {
+            "items": {
+              "$ref": "#/components/schemas/ComboRiskSummarySchema"
+            },
+            "type": "array",
+            "title": "Combinations"
+          },
+          "n_paths": {
+            "type": "integer",
+            "title": "N Paths"
+          },
+          "base_strike": {
+            "type": "number",
+            "title": "Base Strike"
+          }
+        },
+        "type": "object",
+        "required": [
+          "combinations",
+          "n_paths",
+          "base_strike"
+        ],
+        "title": "RiskSummarySchema"
+      },
+      "SimulationRequest": {
+        "properties": {
+          "config": {
+            "$ref": "#/components/schemas/PPAConfigSchema",
+            "default": {
+              "location": {
+                "altitude": 10.0,
+                "lat": 52.1,
+                "lon": 5.1,
+                "tz": "Europe/Amsterdam"
+              },
+              "solar": {
+                "azimuth_deg": 180.0,
+                "capacity_mw": 50.0,
+                "cloud_factor_logit_scale": 0.7,
+                "cloud_factor_phi": 0.9,
+                "degradation_rate": 0.005,
+                "monthly_cloud_means": [
+                  0.38,
+                  0.42,
+                  0.5,
+                  0.57,
+                  0.63,
+                  0.68,
+                  0.68,
+                  0.65,
+                  0.58,
+                  0.5,
+                  0.42,
+                  0.36
+                ],
+                "performance_ratio": 0.8,
+                "seed": 42,
+                "tilt_deg": 35.0
+              },
+              "market": {
+                "ar1_phi": 0.7,
+                "ar1_sigma": 8.0,
+                "base_price": 80.0,
+                "cannibalisation_alpha_2027": 55.0,
+                "cannibalisation_alpha_2036": 90.0,
+                "drift": -1.5,
+                "seasonal_amplitude": 15.0,
+                "seasonal_peak_day": 15,
+                "seed": 42,
+                "weekday_hourly_adder": [
+                  -10.0,
+                  -12.0,
+                  -14.0,
+                  -14.0,
+                  -12.0,
+                  -10.0,
+                  -8.0,
+                  8.0,
+                  20.0,
+                  14.0,
+                  8.0,
+                  2.0,
+                  -5.0,
+                  -5.0,
+                  0.0,
+                  8.0,
+                  15.0,
+                  35.0,
+                  30.0,
+                  22.0,
+                  14.0,
+                  5.0,
+                  0.0,
+                  -8.0
+                ],
+                "weekend_hourly_adder": [
+                  -12.0,
+                  -14.0,
+                  -16.0,
+                  -16.0,
+                  -14.0,
+                  -12.0,
+                  -10.0,
+                  -5.0,
+                  2.0,
+                  5.0,
+                  8.0,
+                  8.0,
+                  2.0,
+                  2.0,
+                  2.0,
+                  4.0,
+                  6.0,
+                  10.0,
+                  12.0,
+                  10.0,
+                  6.0,
+                  2.0,
+                  -2.0,
+                  -10.0
+                ]
+              },
+              "load": {
+                "annual_consumption_gwh": 100.0,
+                "noise_sigma": 0.05,
+                "seasonal_amplitude": 0.15,
+                "seasonal_peak_day": 15,
+                "seed": 42,
+                "weekday_hourly_shape": [
+                  0.55,
+                  0.5,
+                  0.48,
+                  0.48,
+                  0.52,
+                  0.62,
+                  0.78,
+                  0.9,
+                  0.98,
+                  1.02,
+                  1.1,
+                  1.06,
+                  1.0,
+                  1.02,
+                  1.0,
+                  1.02,
+                  1.05,
+                  1.08,
+                  1.1,
+                  1.04,
+                  0.92,
+                  0.8,
+                  0.7,
+                  0.6
+                ],
+                "weekend_hourly_shape": [
+                  0.55,
+                  0.5,
+                  0.48,
+                  0.48,
+                  0.5,
+                  0.58,
+                  0.68,
+                  0.78,
+                  0.85,
+                  0.9,
+                  0.92,
+                  0.9,
+                  0.88,
+                  0.85,
+                  0.83,
+                  0.83,
+                  0.85,
+                  0.88,
+                  0.88,
+                  0.83,
+                  0.75,
+                  0.68,
+                  0.62,
+                  0.58
+                ]
+              },
+              "deal": {
+                "currency": "EUR",
+                "discount_rate": 0.06,
+                "end_date": "2036-12-31",
+                "start_date": "2027-01-01"
+              }
+            }
+          },
+          "n_paths": {
+            "type": "integer",
+            "title": "N Paths",
+            "default": 500
+          },
+          "base_strike": {
+            "type": "number",
+            "title": "Base Strike",
+            "default": 65.0
+          },
+          "modes": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "joint",
+                "price",
+                "volume"
+              ]
+            },
+            "type": "array",
+            "title": "Modes",
+            "default": [
+              "joint",
+              "price",
+              "volume"
+            ]
+          }
+        },
+        "type": "object",
+        "title": "SimulationRequest"
+      },
+      "SolarConfigSchema": {
+        "properties": {
+          "capacity_mw": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "Capacity Mw",
+            "default": 50.0
+          },
+          "tilt_deg": {
+            "type": "number",
+            "title": "Tilt Deg",
+            "default": 35.0
+          },
+          "azimuth_deg": {
+            "type": "number",
+            "title": "Azimuth Deg",
+            "default": 180.0
+          },
+          "performance_ratio": {
+            "type": "number",
+            "exclusiveMaximum": 1.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Performance Ratio",
+            "default": 0.8
+          },
+          "degradation_rate": {
+            "type": "number",
+            "exclusiveMaximum": 0.02,
+            "exclusiveMinimum": 0.0,
+            "title": "Degradation Rate",
+            "default": 0.005
+          },
+          "cloud_factor_phi": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Cloud Factor Phi",
+            "default": 0.9
+          },
+          "cloud_factor_logit_scale": {
+            "type": "number",
+            "title": "Cloud Factor Logit Scale",
+            "default": 0.7
+          },
+          "monthly_cloud_means": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "maxItems": 12,
+            "minItems": 12,
+            "title": "Monthly Cloud Means",
+            "default": [
+              0.38,
+              0.42,
+              0.5,
+              0.57,
+              0.63,
+              0.68,
+              0.68,
+              0.65,
+              0.58,
+              0.5,
+              0.42,
+              0.36
+            ]
+          },
+          "seed": {
+            "type": "integer",
+            "title": "Seed",
+            "default": 42
+          }
+        },
+        "type": "object",
+        "title": "SolarConfigSchema"
+      },
+      "SolverResultSchema": {
+        "properties": {
+          "strike_eur_mwh": {
+            "type": "number",
+            "title": "Strike Eur Mwh"
+          },
+          "achieved_npv": {
+            "type": "number",
+            "title": "Achieved Npv"
+          },
+          "target_npv": {
+            "type": "number",
+            "title": "Target Npv"
+          },
+          "n_iterations": {
+            "type": "integer",
+            "title": "N Iterations"
+          },
+          "converged": {
+            "type": "boolean",
+            "title": "Converged"
+          },
+          "supply_structure": {
+            "type": "string",
+            "title": "Supply Structure"
+          },
+          "pricing_structure": {
+            "type": "string",
+            "title": "Pricing Structure"
+          }
+        },
+        "type": "object",
+        "required": [
+          "strike_eur_mwh",
+          "achieved_npv",
+          "target_npv",
+          "n_iterations",
+          "converged",
+          "supply_structure",
+          "pricing_structure"
+        ],
+        "title": "SolverResultSchema"
+      },
+      "TimeSeriesPoint": {
+        "properties": {
+          "timestamp": {
+            "type": "string",
+            "title": "Timestamp"
+          },
+          "value": {
+            "type": "number",
+            "title": "Value"
+          }
+        },
+        "type": "object",
+        "required": [
+          "timestamp",
+          "value"
+        ],
+        "title": "TimeSeriesPoint"
+      },
+      "TornadoEntrySchema": {
+        "properties": {
+          "parameter": {
+            "type": "string",
+            "title": "Parameter"
+          },
+          "base_value": {
+            "type": "number",
+            "title": "Base Value"
+          },
+          "low_value": {
+            "type": "number",
+            "title": "Low Value"
+          },
+          "high_value": {
+            "type": "number",
+            "title": "High Value"
+          },
+          "npv_base": {
+            "type": "number",
+            "title": "Npv Base"
+          },
+          "npv_low": {
+            "type": "number",
+            "title": "Npv Low"
+          },
+          "npv_high": {
+            "type": "number",
+            "title": "Npv High"
+          },
+          "delta_npv_low": {
+            "type": "number",
+            "title": "Delta Npv Low"
+          },
+          "delta_npv_high": {
+            "type": "number",
+            "title": "Delta Npv High"
+          },
+          "abs_swing": {
+            "type": "number",
+            "title": "Abs Swing"
+          }
+        },
+        "type": "object",
+        "required": [
+          "parameter",
+          "base_value",
+          "low_value",
+          "high_value",
+          "npv_base",
+          "npv_low",
+          "npv_high",
+          "delta_npv_low",
+          "delta_npv_high",
+          "abs_swing"
+        ],
+        "title": "TornadoEntrySchema"
+      },
+      "TornadoRequest": {
+        "properties": {
+          "config": {
+            "$ref": "#/components/schemas/PPAConfigSchema",
+            "default": {
+              "location": {
+                "altitude": 10.0,
+                "lat": 52.1,
+                "lon": 5.1,
+                "tz": "Europe/Amsterdam"
+              },
+              "solar": {
+                "azimuth_deg": 180.0,
+                "capacity_mw": 50.0,
+                "cloud_factor_logit_scale": 0.7,
+                "cloud_factor_phi": 0.9,
+                "degradation_rate": 0.005,
+                "monthly_cloud_means": [
+                  0.38,
+                  0.42,
+                  0.5,
+                  0.57,
+                  0.63,
+                  0.68,
+                  0.68,
+                  0.65,
+                  0.58,
+                  0.5,
+                  0.42,
+                  0.36
+                ],
+                "performance_ratio": 0.8,
+                "seed": 42,
+                "tilt_deg": 35.0
+              },
+              "market": {
+                "ar1_phi": 0.7,
+                "ar1_sigma": 8.0,
+                "base_price": 80.0,
+                "cannibalisation_alpha_2027": 55.0,
+                "cannibalisation_alpha_2036": 90.0,
+                "drift": -1.5,
+                "seasonal_amplitude": 15.0,
+                "seasonal_peak_day": 15,
+                "seed": 42,
+                "weekday_hourly_adder": [
+                  -10.0,
+                  -12.0,
+                  -14.0,
+                  -14.0,
+                  -12.0,
+                  -10.0,
+                  -8.0,
+                  8.0,
+                  20.0,
+                  14.0,
+                  8.0,
+                  2.0,
+                  -5.0,
+                  -5.0,
+                  0.0,
+                  8.0,
+                  15.0,
+                  35.0,
+                  30.0,
+                  22.0,
+                  14.0,
+                  5.0,
+                  0.0,
+                  -8.0
+                ],
+                "weekend_hourly_adder": [
+                  -12.0,
+                  -14.0,
+                  -16.0,
+                  -16.0,
+                  -14.0,
+                  -12.0,
+                  -10.0,
+                  -5.0,
+                  2.0,
+                  5.0,
+                  8.0,
+                  8.0,
+                  2.0,
+                  2.0,
+                  2.0,
+                  4.0,
+                  6.0,
+                  10.0,
+                  12.0,
+                  10.0,
+                  6.0,
+                  2.0,
+                  -2.0,
+                  -10.0
+                ]
+              },
+              "load": {
+                "annual_consumption_gwh": 100.0,
+                "noise_sigma": 0.05,
+                "seasonal_amplitude": 0.15,
+                "seasonal_peak_day": 15,
+                "seed": 42,
+                "weekday_hourly_shape": [
+                  0.55,
+                  0.5,
+                  0.48,
+                  0.48,
+                  0.52,
+                  0.62,
+                  0.78,
+                  0.9,
+                  0.98,
+                  1.02,
+                  1.1,
+                  1.06,
+                  1.0,
+                  1.02,
+                  1.0,
+                  1.02,
+                  1.05,
+                  1.08,
+                  1.1,
+                  1.04,
+                  0.92,
+                  0.8,
+                  0.7,
+                  0.6
+                ],
+                "weekend_hourly_shape": [
+                  0.55,
+                  0.5,
+                  0.48,
+                  0.48,
+                  0.5,
+                  0.58,
+                  0.68,
+                  0.78,
+                  0.85,
+                  0.9,
+                  0.92,
+                  0.9,
+                  0.88,
+                  0.85,
+                  0.83,
+                  0.83,
+                  0.85,
+                  0.88,
+                  0.88,
+                  0.83,
+                  0.75,
+                  0.68,
+                  0.62,
+                  0.58
+                ]
+              },
+              "deal": {
+                "currency": "EUR",
+                "discount_rate": 0.06,
+                "end_date": "2036-12-31",
+                "start_date": "2027-01-01"
+              }
+            }
+          },
+          "supply_structure": {
+            "type": "string",
+            "enum": [
+              "pay_as_produced",
+              "pay_as_nominated",
+              "baseload"
+            ],
+            "title": "Supply Structure",
+            "default": "pay_as_produced"
+          },
+          "pricing_structure": {
+            "type": "string",
+            "enum": [
+              "fixed_flat",
+              "fixed_escalated",
+              "indexed_with_floor_cap",
+              "floating"
+            ],
+            "title": "Pricing Structure",
+            "default": "fixed_flat"
+          },
+          "base_strike": {
+            "type": "number",
+            "title": "Base Strike",
+            "default": 65.0
+          }
+        },
+        "type": "object",
+        "title": "TornadoRequest"
+      },
+      "TornadoResultSchema": {
+        "properties": {
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/TornadoEntrySchema"
+            },
+            "type": "array",
+            "title": "Entries"
+          },
+          "supply_structure": {
+            "type": "string",
+            "title": "Supply Structure"
+          },
+          "pricing_structure": {
+            "type": "string",
+            "title": "Pricing Structure"
+          },
+          "base_strike": {
+            "type": "number",
+            "title": "Base Strike"
+          }
+        },
+        "type": "object",
+        "required": [
+          "entries",
+          "supply_structure",
+          "pricing_structure",
+          "base_strike"
+        ],
+        "title": "TornadoResultSchema"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      },
+      "ValuationMatrixRequest": {
+        "properties": {
+          "config": {
+            "$ref": "#/components/schemas/PPAConfigSchema",
+            "default": {
+              "location": {
+                "altitude": 10.0,
+                "lat": 52.1,
+                "lon": 5.1,
+                "tz": "Europe/Amsterdam"
+              },
+              "solar": {
+                "azimuth_deg": 180.0,
+                "capacity_mw": 50.0,
+                "cloud_factor_logit_scale": 0.7,
+                "cloud_factor_phi": 0.9,
+                "degradation_rate": 0.005,
+                "monthly_cloud_means": [
+                  0.38,
+                  0.42,
+                  0.5,
+                  0.57,
+                  0.63,
+                  0.68,
+                  0.68,
+                  0.65,
+                  0.58,
+                  0.5,
+                  0.42,
+                  0.36
+                ],
+                "performance_ratio": 0.8,
+                "seed": 42,
+                "tilt_deg": 35.0
+              },
+              "market": {
+                "ar1_phi": 0.7,
+                "ar1_sigma": 8.0,
+                "base_price": 80.0,
+                "cannibalisation_alpha_2027": 55.0,
+                "cannibalisation_alpha_2036": 90.0,
+                "drift": -1.5,
+                "seasonal_amplitude": 15.0,
+                "seasonal_peak_day": 15,
+                "seed": 42,
+                "weekday_hourly_adder": [
+                  -10.0,
+                  -12.0,
+                  -14.0,
+                  -14.0,
+                  -12.0,
+                  -10.0,
+                  -8.0,
+                  8.0,
+                  20.0,
+                  14.0,
+                  8.0,
+                  2.0,
+                  -5.0,
+                  -5.0,
+                  0.0,
+                  8.0,
+                  15.0,
+                  35.0,
+                  30.0,
+                  22.0,
+                  14.0,
+                  5.0,
+                  0.0,
+                  -8.0
+                ],
+                "weekend_hourly_adder": [
+                  -12.0,
+                  -14.0,
+                  -16.0,
+                  -16.0,
+                  -14.0,
+                  -12.0,
+                  -10.0,
+                  -5.0,
+                  2.0,
+                  5.0,
+                  8.0,
+                  8.0,
+                  2.0,
+                  2.0,
+                  2.0,
+                  4.0,
+                  6.0,
+                  10.0,
+                  12.0,
+                  10.0,
+                  6.0,
+                  2.0,
+                  -2.0,
+                  -10.0
+                ]
+              },
+              "load": {
+                "annual_consumption_gwh": 100.0,
+                "noise_sigma": 0.05,
+                "seasonal_amplitude": 0.15,
+                "seasonal_peak_day": 15,
+                "seed": 42,
+                "weekday_hourly_shape": [
+                  0.55,
+                  0.5,
+                  0.48,
+                  0.48,
+                  0.52,
+                  0.62,
+                  0.78,
+                  0.9,
+                  0.98,
+                  1.02,
+                  1.1,
+                  1.06,
+                  1.0,
+                  1.02,
+                  1.0,
+                  1.02,
+                  1.05,
+                  1.08,
+                  1.1,
+                  1.04,
+                  0.92,
+                  0.8,
+                  0.7,
+                  0.6
+                ],
+                "weekend_hourly_shape": [
+                  0.55,
+                  0.5,
+                  0.48,
+                  0.48,
+                  0.5,
+                  0.58,
+                  0.68,
+                  0.78,
+                  0.85,
+                  0.9,
+                  0.92,
+                  0.9,
+                  0.88,
+                  0.85,
+                  0.83,
+                  0.83,
+                  0.85,
+                  0.88,
+                  0.88,
+                  0.83,
+                  0.75,
+                  0.68,
+                  0.62,
+                  0.58
+                ]
+              },
+              "deal": {
+                "currency": "EUR",
+                "discount_rate": 0.06,
+                "end_date": "2036-12-31",
+                "start_date": "2027-01-01"
+              }
+            }
+          },
+          "base_strike": {
+            "type": "number",
+            "title": "Base Strike",
+            "default": 65.0
+          }
+        },
+        "type": "object",
+        "title": "ValuationMatrixRequest"
+      },
+      "ValuationMatrixResponse": {
+        "properties": {
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/ValuationRowSchema"
+            },
+            "type": "array",
+            "title": "Rows"
+          },
+          "base_strike": {
+            "type": "number",
+            "title": "Base Strike"
+          }
+        },
+        "type": "object",
+        "required": [
+          "rows",
+          "base_strike"
+        ],
+        "title": "ValuationMatrixResponse"
+      },
+      "ValuationRowSchema": {
+        "properties": {
+          "supply_structure": {
+            "type": "string",
+            "title": "Supply Structure"
+          },
+          "pricing_structure": {
+            "type": "string",
+            "title": "Pricing Structure"
+          },
+          "producer_npv": {
+            "type": "number",
+            "title": "Producer Npv"
+          },
+          "consumer_npv": {
+            "type": "number",
+            "title": "Consumer Npv"
+          },
+          "total_volume_mwh": {
+            "type": "number",
+            "title": "Total Volume Mwh"
+          },
+          "average_strike_eur_mwh": {
+            "type": "number",
+            "title": "Average Strike Eur Mwh"
+          },
+          "capture_rate": {
+            "type": "number",
+            "title": "Capture Rate"
+          },
+          "volume_value": {
+            "type": "number",
+            "title": "Volume Value"
+          },
+          "profile_value": {
+            "type": "number",
+            "title": "Profile Value"
+          }
+        },
+        "type": "object",
+        "required": [
+          "supply_structure",
+          "pricing_structure",
+          "producer_npv",
+          "consumer_npv",
+          "total_volume_mwh",
+          "average_strike_eur_mwh",
+          "capture_rate",
+          "volume_value",
+          "profile_value"
+        ],
+        "title": "ValuationRowSchema"
+      },
+      "VarianceDecompositionSchema": {
+        "properties": {
+          "total_variance": {
+            "type": "number",
+            "title": "Total Variance"
+          },
+          "price_share": {
+            "type": "number",
+            "title": "Price Share"
+          },
+          "volume_share": {
+            "type": "number",
+            "title": "Volume Share"
+          },
+          "interaction_share": {
+            "type": "number",
+            "title": "Interaction Share"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total_variance",
+          "price_share",
+          "volume_share",
+          "interaction_share"
+        ],
+        "title": "VarianceDecompositionSchema"
+      }
+    }
+  }
+}
