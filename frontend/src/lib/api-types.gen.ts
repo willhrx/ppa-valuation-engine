@@ -366,6 +366,7 @@ export interface components {
              *         "cannibalisation_alpha_2027": 55,
              *         "cannibalisation_alpha_2036": 90,
              *         "drift": -1.5,
+             *         "production_cannibalisation_correlation": 0.65,
              *         "seasonal_amplitude": 15,
              *         "seasonal_peak_day": 15,
              *         "seed": 42,
@@ -659,6 +660,11 @@ export interface components {
              */
             cannibalisation_alpha_2036: number;
             /**
+             * Production Cannibalisation Correlation
+             * @default 0.65
+             */
+            production_cannibalisation_correlation: number;
+            /**
              * Ar1 Phi
              * @default 0.7
              */
@@ -754,6 +760,7 @@ export interface components {
              *         "cannibalisation_alpha_2027": 55,
              *         "cannibalisation_alpha_2036": 90,
              *         "drift": -1.5,
+             *         "production_cannibalisation_correlation": 0.65,
              *         "seasonal_amplitude": 15,
              *         "seasonal_peak_day": 15,
              *         "seed": 42,
@@ -1019,6 +1026,7 @@ export interface components {
              *         "cannibalisation_alpha_2027": 55,
              *         "cannibalisation_alpha_2036": 90,
              *         "drift": -1.5,
+             *         "production_cannibalisation_correlation": 0.65,
              *         "seasonal_amplitude": 15,
              *         "seasonal_peak_day": 15,
              *         "seed": 42,
@@ -1312,6 +1320,7 @@ export interface components {
              *         "cannibalisation_alpha_2027": 55,
              *         "cannibalisation_alpha_2036": 90,
              *         "drift": -1.5,
+             *         "production_cannibalisation_correlation": 0.65,
              *         "seasonal_amplitude": 15,
              *         "seasonal_peak_day": 15,
              *         "seed": 42,
@@ -1519,6 +1528,7 @@ export interface components {
              *         "cannibalisation_alpha_2027": 55,
              *         "cannibalisation_alpha_2036": 90,
              *         "drift": -1.5,
+             *         "production_cannibalisation_correlation": 0.65,
              *         "seasonal_amplitude": 15,
              *         "seasonal_peak_day": 15,
              *         "seed": 42,

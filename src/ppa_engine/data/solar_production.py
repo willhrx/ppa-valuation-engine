@@ -79,6 +79,29 @@ def _clearsky_poa(times: pd.DatetimeIndex, config: PPAConfig) -> np.ndarray:
     return poa["poa_global"].fillna(0.0).values
 
 
+def compute_cloud_factor(
+    times: pd.DatetimeIndex,
+    config: PPAConfig,
+    seed: int | None = None,
+) -> np.ndarray:
+    """
+    Public helper used by both the solar generator and the price layer-4
+    cannibalisation modulation. Re-using the same cloud realisation across
+    production and prices is what creates the production–cannibalisation
+    correlation in the central scenario.
+    """
+    sc = config.solar
+    monthly_logit = np.array([logit(m) for m in sc.monthly_cloud_means])
+    hour_logit_mean = monthly_logit[np.array([t.month - 1 for t in times])]
+    return ar1_logit_process(
+        n=len(times),
+        phi=sc.cloud_factor_phi,
+        logit_scale=sc.cloud_factor_logit_scale,
+        monthly_logit_means=hour_logit_mean,
+        seed=sc.seed if seed is None else seed,
+    )
+
+
 def _cloud_factor(times: pd.DatetimeIndex, config: PPAConfig) -> np.ndarray:
     """
     Generate a stochastic hourly cloud factor in (0, 1).
@@ -110,18 +133,7 @@ def _cloud_factor(times: pd.DatetimeIndex, config: PPAConfig) -> np.ndarray:
     np.ndarray
         Cloud factor values in (0, 1), shape (len(times),).
     """
-    sc = config.solar
-
-    monthly_logit = np.array([logit(m) for m in sc.monthly_cloud_means])
-    hour_logit_mean = monthly_logit[np.array([t.month - 1 for t in times])]
-
-    return ar1_logit_process(
-        n=len(times),
-        phi=sc.cloud_factor_phi,
-        logit_scale=sc.cloud_factor_logit_scale,
-        monthly_logit_means=hour_logit_mean,
-        seed=sc.seed,
-    )
+    return compute_cloud_factor(times, config)
 
 
 def generate_solar_production(config: PPAConfig | None = None) -> pd.Series:

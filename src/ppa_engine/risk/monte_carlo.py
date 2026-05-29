@@ -24,7 +24,6 @@ from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
-from scipy.special import expit, logit
 
 from ppa_engine.config import PPAConfig
 from ppa_engine.data.consumer_load import generate_consumer_load
@@ -35,8 +34,8 @@ from ppa_engine.data.market_prices import (
     _layer3_intraday,
     _layer4_cannibalisation,
 )
-from ppa_engine.data.solar_production import _clearsky_poa
-from ppa_engine.utils.ar1 import ar1_logit_process, ar1_process
+from ppa_engine.data.solar_production import _clearsky_poa, compute_cloud_factor
+from ppa_engine.utils.ar1 import ar1_process
 from ppa_engine.valuation.engine import value_all_combinations
 
 logger = logging.getLogger(__name__)
@@ -86,26 +85,24 @@ class MonteCarloResult:
 # ---------------------------------------------------------------------------
 
 
-def _solar_series(
+def _cloud_series(
+    times: pd.DatetimeIndex,
+    config: PPAConfig,
+    seed: int,
+) -> np.ndarray:
+    """Per-path cloud factor — re-used by both solar and (layer 4) prices."""
+    return compute_cloud_factor(times, config, seed=seed)
+
+
+def _solar_from_cloud(
     times: pd.DatetimeIndex,
     poa_clearsky: np.ndarray,
     degradation: np.ndarray,
     config: PPAConfig,
-    seed: int,
+    cloud: np.ndarray,
 ) -> pd.Series:
-    """Generate one solar production path for a given seed."""
+    """Build solar production from a pre-computed cloud factor."""
     sc = config.solar
-
-    monthly_logit = np.array([logit(m) for m in sc.monthly_cloud_means])
-    hour_logit_mean = monthly_logit[np.array([t.month - 1 for t in times])]
-
-    cloud = ar1_logit_process(
-        n=len(times),
-        phi=sc.cloud_factor_phi,
-        logit_scale=sc.cloud_factor_logit_scale,
-        monthly_logit_means=hour_logit_mean,
-        seed=seed,
-    )
     out = (
         sc.capacity_mw
         * sc.performance_ratio
@@ -117,12 +114,21 @@ def _solar_series(
 
 def _price_series(
     times: pd.DatetimeIndex,
-    deterministic_layers: np.ndarray,
+    deterministic_layers_1_3: np.ndarray,
     config: PPAConfig,
     seed: int,
+    cloud_factor: np.ndarray | None = None,
 ) -> pd.Series:
-    """Generate one price path for a given seed."""
+    """
+    Generate one price path for a given noise seed.
+
+    ``deterministic_layers_1_3`` is the cached sum of layers 1–3 (the parts
+    that do NOT depend on the realised cloud). Layer 4 is recomputed with the
+    supplied ``cloud_factor`` so the midday dip co-moves with production when
+    ``market.production_cannibalisation_correlation`` > 0.
+    """
     mc = config.market
+    layer4 = _layer4_cannibalisation(times, config, cloud_factor=cloud_factor)
     noise = ar1_process(
         n=len(times),
         phi=mc.ar1_phi,
@@ -130,7 +136,9 @@ def _price_series(
         seed=seed,
     )
     return pd.Series(
-        deterministic_layers + noise, index=times, name="market_price_eur_mwh"
+        deterministic_layers_1_3 + layer4 + noise,
+        index=times,
+        name="market_price_eur_mwh",
     )
 
 
@@ -144,20 +152,24 @@ def _run_ensemble(
     times: pd.DatetimeIndex,
     poa_clearsky: np.ndarray,
     degradation: np.ndarray,
-    deterministic_price: np.ndarray,
+    deterministic_price_1_3: np.ndarray,
     load: pd.Series,
     config: PPAConfig,
     n_paths: int,
     base_strike: float,
     central_solar: pd.Series,
     central_prices: pd.Series,
+    central_cloud: np.ndarray,
 ) -> pd.DataFrame:
     """
     Run n_paths for one decomposition mode.
 
-    mode='joint'  — both seeds perturbed
-    mode='price'  — only price seed perturbed; solar = central_solar
-    mode='volume' — only solar seed perturbed; prices = central_prices
+    mode='joint'  — independent solar and price seeds; layer 4 uses path cloud
+    mode='price'  — solar fixed at central; layer 4 uses central cloud
+    mode='volume' — solar varies; layer 4 ALSO uses the path cloud, so the
+                    midday dip co-moves with production via ρ. Layer-5 noise
+                    stays at the central seed so this ensemble isolates the
+                    volume-driven (and correlated) component of revenue risk.
     """
     logger.info("[%s] running %d paths...", mode, n_paths)
 
@@ -166,25 +178,34 @@ def _run_ensemble(
 
     for i in range(n_paths):
         if mode == "volume":
-            solar = _solar_series(
-                times, poa_clearsky, degradation, config,
-                _VOLUME_SOLAR_BASE + i * _PATH_PRIME,
+            cloud = _cloud_series(
+                times, config, _VOLUME_SOLAR_BASE + i * _PATH_PRIME,
             )
-            prices = central_prices
+            solar = _solar_from_cloud(
+                times, poa_clearsky, degradation, config, cloud,
+            )
+            prices = _price_series(
+                times, deterministic_price_1_3, config,
+                config.market.seed, cloud_factor=cloud,
+            )
         elif mode == "price":
             solar = central_solar
             prices = _price_series(
-                times, deterministic_price, config,
+                times, deterministic_price_1_3, config,
                 _PRICE_PRICE_BASE + i * _PATH_PRIME,
+                cloud_factor=central_cloud,
             )
         else:  # joint
-            solar = _solar_series(
-                times, poa_clearsky, degradation, config,
-                _JOINT_SOLAR_BASE + i * _PATH_PRIME,
+            cloud = _cloud_series(
+                times, config, _JOINT_SOLAR_BASE + i * _PATH_PRIME,
+            )
+            solar = _solar_from_cloud(
+                times, poa_clearsky, degradation, config, cloud,
             )
             prices = _price_series(
-                times, deterministic_price, config,
+                times, deterministic_price_1_3, config,
                 _JOINT_PRICE_BASE + i * _PATH_PRIME,
+                cloud_factor=cloud,
             )
 
         combo = value_all_combinations(solar, load, prices, config, base_strike=base_strike)
@@ -283,22 +304,27 @@ def run_monte_carlo(
     year_offset = np.array([t.year - start_year for t in times])
     degradation = 1.0 - config.solar.degradation_rate * year_offset
 
-    deterministic_price = (
+    # Layers 1-3 are independent of the cloud factor and can be cached. Layer
+    # 4 is recomputed per path (or per central scenario) so it can be
+    # modulated by the realised cloud factor.
+    deterministic_price_1_3 = (
         _layer1_level(times, config)
         + _layer2_seasonal(times, config)
         + _layer3_intraday(times, config)
-        + _layer4_cannibalisation(times, config)
     )
 
     load = generate_consumer_load(config)
 
-    # Step 3: central scenario at base seeds
+    # Step 3: central scenario at base seeds. The central cloud is also
+    # what 'price' mode uses to anchor its layer-4 dip.
     logger.info("Computing central scenario...")
-    central_solar = _solar_series(
-        times, poa_clearsky, degradation, config, config.solar.seed
+    central_cloud = _cloud_series(times, config, config.solar.seed)
+    central_solar = _solar_from_cloud(
+        times, poa_clearsky, degradation, config, central_cloud,
     )
     central_prices = _price_series(
-        times, deterministic_price, config, config.market.seed
+        times, deterministic_price_1_3, config, config.market.seed,
+        cloud_factor=central_cloud,
     )
     central_df = value_all_combinations(
         central_solar, load, central_prices, config, base_strike=base_strike
@@ -308,8 +334,9 @@ def run_monte_carlo(
     frames: list[pd.DataFrame] = []
     for mode in modes:
         df = _run_ensemble(
-            mode, times, poa_clearsky, degradation, deterministic_price,
+            mode, times, poa_clearsky, degradation, deterministic_price_1_3,
             load, config, n_paths, base_strike, central_solar, central_prices,
+            central_cloud,
         )
         frames.append(df)
 

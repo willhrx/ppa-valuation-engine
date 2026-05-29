@@ -121,6 +121,14 @@ class MarketPriceConfig:
     cannibalisation_alpha_2027: float = 55.0   # EUR/MWh at full solar proxy
     cannibalisation_alpha_2036: float = 90.0   # grows linearly to this by 2036
 
+    # Production–cannibalisation correlation (ρ ∈ [0, 1])
+    # Dutch solar generation is geographically correlated: when our asset has
+    # clear skies, so does most of NL, which deepens the midday price dip.
+    # ρ = 0  → original behaviour, layer-4 dip is purely diurnal/seasonal.
+    # ρ = 1  → midday dip scales linearly with the asset's own cloud factor.
+    # Empirical Dutch sky-correlation across the country sits around 0.6–0.75.
+    production_cannibalisation_correlation: float = 0.65
+
     # Layer 5 — AR(1) noise
     ar1_phi: float = 0.70
     ar1_sigma: float = 8.0    # EUR/MWh, stationary standard deviation
@@ -261,6 +269,13 @@ class PPAConfig:
             raise ValueError(
                 f"market.weekend_hourly_adder must have length 24 "
                 f"(got {len(self.market.weekend_hourly_adder)})."
+            )
+
+        rho = self.market.production_cannibalisation_correlation
+        if not (0.0 <= rho <= 1.0):
+            raise ValueError(
+                f"market.production_cannibalisation_correlation must be in "
+                f"[0, 1] (got {rho})."
             )
 
 

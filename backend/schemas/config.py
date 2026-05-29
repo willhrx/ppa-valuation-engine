@@ -53,6 +53,13 @@ class MarketPriceConfigSchema(BaseModel):
     )
     cannibalisation_alpha_2027: float = 55.0
     cannibalisation_alpha_2036: float = 90.0
+    # ρ ∈ [0, 1]. Couples layer-4 (cannibalisation) depth to the realised
+    # asset cloud factor: high-irradiance days get a deeper midday dip,
+    # overcast days a shallower one. ρ = 0 reproduces the legacy purely
+    # diurnal layer 4. UI default matches the engine default (0.65).
+    production_cannibalisation_correlation: float = Field(
+        default=0.65, ge=0.0, le=1.0
+    )
     ar1_phi: float = 0.70
     ar1_sigma: float = 8.0
     seed: int = 42

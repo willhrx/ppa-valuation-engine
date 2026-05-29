@@ -600,6 +600,7 @@
                 "cannibalisation_alpha_2027": 55.0,
                 "cannibalisation_alpha_2036": 90.0,
                 "drift": -1.5,
+                "production_cannibalisation_correlation": 0.65,
                 "seasonal_amplitude": 15.0,
                 "seasonal_peak_day": 15,
                 "seed": 42,
@@ -955,6 +956,13 @@
             "title": "Cannibalisation Alpha 2036",
             "default": 90.0
           },
+          "production_cannibalisation_correlation": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Production Cannibalisation Correlation",
+            "default": 0.65
+          },
           "ar1_phi": {
             "type": "number",
             "title": "Ar1 Phi",
@@ -1122,6 +1130,7 @@
                 "cannibalisation_alpha_2027": 55.0,
                 "cannibalisation_alpha_2036": 90.0,
                 "drift": -1.5,
+                "production_cannibalisation_correlation": 0.65,
                 "seasonal_amplitude": 15.0,
                 "seasonal_peak_day": 15,
                 "seed": 42,
@@ -1551,6 +1560,7 @@
                 "cannibalisation_alpha_2027": 55.0,
                 "cannibalisation_alpha_2036": 90.0,
                 "drift": -1.5,
+                "production_cannibalisation_correlation": 0.65,
                 "seasonal_amplitude": 15.0,
                 "seasonal_peak_day": 15,
                 "seed": 42,
@@ -1942,6 +1952,7 @@
                 "cannibalisation_alpha_2027": 55.0,
                 "cannibalisation_alpha_2036": 90.0,
                 "drift": -1.5,
+                "production_cannibalisation_correlation": 0.65,
                 "seasonal_amplitude": 15.0,
                 "seasonal_peak_day": 15,
                 "seed": 42,
@@ -2208,6 +2219,7 @@
                 "cannibalisation_alpha_2027": 55.0,
                 "cannibalisation_alpha_2036": 90.0,
                 "drift": -1.5,
+                "production_cannibalisation_correlation": 0.65,
                 "seasonal_amplitude": 15.0,
                 "seasonal_peak_day": 15,
                 "seed": 42,

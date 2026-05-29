@@ -21,9 +21,13 @@ Layer 3 — Intra-day shape
       - Night trough
 
 Layer 4 — Solar cannibalisation
-    cannibalisation(t) = −α(year) × solar_proxy(t)
+    cannibalisation(t) = −α(year) × solar_proxy(t) × modulation(t)
     solar_proxy peaks at noon in mid-summer (all NL panels generate together).
     α grows linearly from 2027→2036 reflecting continued solar build-out.
+    modulation(t) ties the dip to the realised asset cloud factor via
+    ρ = market.production_cannibalisation_correlation. On a clear-sky day
+    cloud_factor > monthly mean → modulation > 1 → deeper dip; on overcast
+    days the dip shrinks. ρ = 0 reproduces the legacy purely-diurnal layer.
     Critical for capture-rate erosion: mid-summer noon prices start ~45 EUR/MWh
     in 2027 and can go negative by 2034.
 
@@ -97,7 +101,11 @@ def _layer3_intraday(times: pd.DatetimeIndex, config: PPAConfig) -> np.ndarray:
     return np.where(is_weekend, we_arr[hours], wd_arr[hours])
 
 
-def _layer4_cannibalisation(times: pd.DatetimeIndex, config: PPAConfig) -> np.ndarray:
+def _layer4_cannibalisation(
+    times: pd.DatetimeIndex,
+    config: PPAConfig,
+    cloud_factor: np.ndarray | None = None,
+) -> np.ndarray:
     """
     Solar cannibalisation term [EUR/MWh].
 
@@ -109,6 +117,21 @@ def _layer4_cannibalisation(times: pd.DatetimeIndex, config: PPAConfig) -> np.nd
     roughly March–September.  Their product peaks at solar noon in late June.
 
     α(year) interpolates linearly from alpha_2027 to alpha_2036.
+
+    Parameters
+    ----------
+    cloud_factor :
+        Optional asset-level cloud factor in (0, 1), same length as ``times``.
+        When provided together with
+        ``market.production_cannibalisation_correlation > 0`` the dip is
+        modulated by clearness relative to the monthly climatological mean:
+
+            relative_clearness(t) = cloud_factor(t) / monthly_mean(month)
+            modulation(t)         = (1 - ρ) + ρ × relative_clearness(t)
+
+        modulation is clipped to [0, 2.5] so a single extreme realisation
+        cannot blow up the price. When ``cloud_factor`` is None or ρ == 0
+        the function returns the legacy purely-diurnal cannibalisation.
     """
     mc = config.market
     start_year = pd.Timestamp(config.deal.start_date).year
@@ -117,6 +140,7 @@ def _layer4_cannibalisation(times: pd.DatetimeIndex, config: PPAConfig) -> np.nd
 
     hours = np.array([t.hour for t in times], dtype=float)
     doy = np.array([t.dayofyear for t in times], dtype=float)
+    months = np.array([t.month - 1 for t in times], dtype=int)
     years = np.array([t.year - start_year for t in times], dtype=float)
 
     # Diurnal solar proxy (zero at night)
@@ -126,6 +150,14 @@ def _layer4_cannibalisation(times: pd.DatetimeIndex, config: PPAConfig) -> np.nd
     season_proxy = np.maximum(0.0, np.sin(np.pi * (doy - 80.0) / 185.0))
 
     system_solar_proxy = hour_proxy * season_proxy
+
+    rho = float(mc.production_cannibalisation_correlation)
+    if cloud_factor is not None and rho > 0.0:
+        monthly_means = np.asarray(config.solar.monthly_cloud_means, dtype=float)
+        expected_cloud = monthly_means[months]
+        relative_clearness = np.asarray(cloud_factor, dtype=float) / expected_cloud
+        modulation = np.clip((1.0 - rho) + rho * relative_clearness, 0.0, 2.5)
+        system_solar_proxy = system_solar_proxy * modulation
 
     # Growing cannibalisation coefficient
     alpha = mc.cannibalisation_alpha_2027 + (
@@ -177,10 +209,22 @@ def generate_market_prices(config: PPAConfig | None = None) -> pd.Series:
 
     times = _build_timestamps(config)
 
+    # Layer 4 is now conditional on the asset's cloud factor when
+    # production_cannibalisation_correlation > 0, so production and prices
+    # share the same realised weather. Using the solar seed keeps the central
+    # price scenario coherent with the central solar production series.
+    from ppa_engine.data.solar_production import compute_cloud_factor
+
+    cloud = (
+        compute_cloud_factor(times, config)
+        if config.market.production_cannibalisation_correlation > 0.0
+        else None
+    )
+
     layer1 = _layer1_level(times, config)
     layer2 = _layer2_seasonal(times, config)
     layer3 = _layer3_intraday(times, config)
-    layer4 = _layer4_cannibalisation(times, config)
+    layer4 = _layer4_cannibalisation(times, config, cloud_factor=cloud)
     layer5 = _layer5_ar1_noise(times, config)
 
     prices = layer1 + layer2 + layer3 + layer4 + layer5

@@ -4,21 +4,61 @@ A Python-based valuation and risk analysis tool for Power Purchase Agreements on
 
 ## Quick Start
 
+The engine ships as a decoupled FastAPI backend (Python) and a Vite + React
+frontend (TypeScript). Run them in two terminals.
+
+### Prerequisites
+
+- Python ≥ 3.10
+- Node.js ≥ 20 with npm (pnpm or yarn also work)
+
+### 1. Backend (FastAPI + Uvicorn)
+
 ```bash
 git clone https://github.com/willhrx/ppa-valuation-engine.git
 cd ppa-valuation-engine
+python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -e ".[dev]"
-streamlit run app/main.py
+uvicorn backend.main:app --reload --port 8000
 ```
 
-The app opens at `http://localhost:8501`.
+The API is now live at `http://localhost:8000` and the interactive Swagger
+docs at `http://localhost:8000/docs`. Health probe: `GET /api/health`.
 
-- **Deal Setup** — configure your solar asset, market assumptions, and offtaker load
-- **Run Simulation** — launch a Monte Carlo simulation (500 paths ≈ 20 s)
-- **Risk Summary** — interactive dashboard with NPV distributions, break-even analysis, and risk attribution charts
-- **Reports** — download a PDF deal summary or Excel workbook
+### 2. Frontend (Vite dev server)
 
-Screenshot: _add screenshot of Risk Summary page here_
+In a second terminal:
+
+```bash
+cd frontend
+npm install
+npm run gen:types     # regenerates src/lib/api-types.gen.ts from openapi.json
+npm run dev
+```
+
+The app opens at `http://localhost:5173`.
+
+- **Deal Setup** — configure the solar asset, market assumptions, and offtaker load
+- **Profiles & Preview** — inspect generated hourly profiles and headline KPIs
+- **Valuation Matrix** — NPVs across 12 supply × pricing combinations
+- **Monte Carlo** — run the 1,000-path simulation and explore the risk distribution
+- **Solver** — negotiation range, tornado sensitivities, and cross-structure fair strikes
+
+### 3. Refreshing the API contract
+
+Whenever a backend schema or route changes, refresh the OpenAPI snapshot
+that the frontend consumes for typed clients:
+
+```bash
+python scripts/export_openapi.py     # writes backend/openapi.json
+cd frontend && npm run gen:types     # regenerates src/lib/api-types.gen.ts
+```
+
+### Legacy Streamlit prototype
+
+The original Streamlit prototype under `app/` is kept for reference only —
+`streamlit run app/main.py` still works but is no longer the supported
+quickstart path. New work should target the FastAPI/React stack above.
 
 ## Motivation
 
@@ -90,44 +130,101 @@ Every forward-looking input is an explicit, named, configurable assumption — n
 
 The model is a scenario tool: swap the assumptions, re-run, and observe how the pricing range moves. The output is never a single NPV — it is always a distribution conditional on stated assumptions, with sensitivity analysis showing which assumptions matter most.
 
-## Project Structure
+## Modeling Assumptions
+
+This section documents quantitative choices that are not obvious from the
+code alone. Update it whenever a structural assumption changes.
+
+### Production–cannibalisation correlation
+
+Solar irradiance is strongly correlated across the Netherlands: the country
+is small relative to typical synoptic weather systems, so when our 50 MW
+asset in Utrecht sees clear skies, most of the Dutch solar fleet does too.
+This means the midday wholesale price dip should be **deeper on the same
+days that the asset's own output is highest** — and shallower on overcast
+days when the asset is underproducing.
+
+Previously, the asset cloud factor (used in `data/solar_production.py`) and
+the price layer-4 cannibalisation term (used in `data/market_prices.py`)
+were sampled from independent random streams, so a sunny asset-day could
+coincide with an "average" midday price dip. That produced unrealistically
+high capture rates in the upper tail of the Monte Carlo distribution.
+
+The fix introduces a single new parameter on `MarketPriceConfig`:
+
+```python
+production_cannibalisation_correlation: float = 0.65   # ρ ∈ [0, 1]
+```
+
+Layer 4 of the price model is now:
+
+```text
+cannibalisation(t) = − α(year) × system_solar_proxy(t) × modulation(t)
+
+relative_clearness(t) = cloud_factor(t) / monthly_mean_cloud(month)
+modulation(t)         = clip( (1 − ρ) + ρ × relative_clearness(t),  0,  2.5 )
+```
+
+Where:
+
+- `cloud_factor(t)` is the same realised AR(1) cloud factor that drives the
+  asset's own production — i.e. the central scenario uses one cloud series
+  for both solar and prices, and each Monte Carlo path uses a per-path
+  cloud series for both.
+- `relative_clearness(t)` is dimensionless and ≈ 1 on a typical day, so the
+  long-run average cannibalisation level is preserved; only its
+  *day-to-day* covariance with production changes.
+- `ρ = 0` reproduces the previous behaviour exactly (regression-tested).
+- `ρ = 0.65` is the default, anchored on the empirical regional sky
+  correlation across the NL grid (typically 0.6–0.75 between Utrecht and
+  the rest of the country).
+
+The parameter is exposed through the FastAPI surface
+(`MarketPriceConfigSchema.production_cannibalisation_correlation`) so the
+frontend can move it on a slider and re-run.
 
 ```text
 ppa-valuation-engine/
+├── backend/                       # FastAPI app — thin HTTP layer over ppa_engine
+│   ├── main.py                    # FastAPI() app, CORS, router wiring
+│   ├── openapi.json               # exported spec consumed by the frontend
+│   ├── routers/                   # one router per domain endpoint
+│   │   ├── config.py              #   /api/config/{defaults,validate}
+│   │   ├── profiles.py            #   /api/profiles
+│   │   ├── preview.py             #   /api/preview
+│   │   ├── valuation.py           #   /api/valuation/matrix
+│   │   ├── simulation.py          #   /api/simulate
+│   │   └── solver.py              #   /api/solver/{negotiation-range,tornado,fair-strike}
+│   └── schemas/                   # Pydantic request / response models
+│       ├── config.py              #   PPAConfigSchema → to_engine_config()
+│       └── results.py
+├── frontend/                      # Vite + React + TypeScript + shadcn/ui
+│   ├── src/
+│   │   ├── components/            # shadcn primitives + dense TanStack tables
+│   │   ├── hooks/
+│   │   ├── lib/                   # api-types.gen.ts (from OpenAPI)
+│   │   └── App.tsx
+│   ├── package.json
+│   └── vite.config.ts
 ├── src/
-│   └── ppa_engine/
-│       ├── data/                  # Synthetic data generators
+│   └── ppa_engine/                # Quantitative core — keep changes minimal
+│       ├── data/                  #   synthetic data generators
 │       │   ├── solar_production.py
 │       │   ├── consumer_load.py
-│       │   └── market_prices.py
-│       ├── structures/            # Supply structure implementations
-│       │   ├── base.py
-│       │   ├── pay_as_produced.py
-│       │   ├── pay_as_nominated.py
-│       │   └── baseload.py
-│       ├── pricing/               # Pricing structure implementations
-│       │   ├── base.py
-│       │   ├── fixed.py
-│       │   ├── indexed.py
-│       │   └── floating.py
-│       ├── valuation/             # NPV, capture price, solver
-│       │   ├── npv.py
-│       │   ├── capture.py
-│       │   └── solver.py
-│       ├── risk/                  # Monte Carlo and risk metrics
-│       │   ├── monte_carlo.py
-│       │   ├── price_process.py
-│       │   ├── production_scenarios.py
-│       │   └── metrics.py
-│       └── config.py              # All assumptions as dataclasses
-├── notebooks/
-│   ├── 00_data_sanity_checks.ipynb
-│   ├── 01_single_deal_walkthrough.ipynb
-│   └── 02_risk_decomposition.ipynb
+│       │   └── market_prices.py   #   5-layer price model + correlation hook
+│       ├── structures/            #   pay-as-produced / pay-as-nominated / baseload
+│       ├── pricing/               #   fixed / indexed / floating
+│       ├── valuation/             #   NPV, capture price, solver
+│       ├── risk/                  #   Monte Carlo, price process, scenarios, metrics
+│       ├── utils/                 #   shared AR(1) helpers
+│       └── config.py              #   PPAConfig dataclasses — single source of truth
+├── scripts/
+│   ├── export_openapi.py          # regenerate backend/openapi.json
+│   └── run_monte_carlo.py         # headless 1,000-path runner for CLI use
+├── app/                           # legacy Streamlit prototype (kept for reference)
 ├── tests/
 ├── data/
 └── reports/
-    └── methodology.md
 ```
 
 ## Build Plan
