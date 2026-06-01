@@ -24,6 +24,7 @@ data/*.pkl
 data/*.feather
 
 # IDE
+CLAUDE.md
 .claude/
 .vscode/
 .idea/

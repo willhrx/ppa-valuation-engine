@@ -1,9 +1,12 @@
 """
-market_prices.py — Five-layer synthetic Dutch day-ahead wholesale price model.
+market_prices.py — Six-layer synthetic Dutch day-ahead wholesale price model.
 
-Every layer is a named, documentable assumption.  The layers are summed to
-give the final hourly price series.  Negative prices are allowed (real EPEX
-NL goes negative on sunny, windy Sundays).
+The intra-day shape is split into two **independently determined** sublayers:
+demand (3a, deterministic) and wind supply (3b, stochastic). Together with
+the solar cannibalisation layer (4), the renewable-supply picture is complete
+and demand is isolated. The layers are summed to give the final hourly price
+series.  Negative prices are allowed (real EPEX NL goes negative on sunny,
+windy Sundays).
 
 Layer 1 — Long-term level and drift
     level(t) = base_price + drift × years_from_2027(t)
@@ -13,28 +16,33 @@ Layer 2 — Seasonal shape
     seasonal(t) = amplitude × cos(2π × (doy − peak_day) / 365)
     Winter high (gas heating demand), summer low (solar oversupply).
 
-Layer 3 — Intra-day shape
-    24-element additive vector, separate weekday/weekend profiles.
-    Calibrated to match EPEX NL structural patterns:
-      - Evening peak ~17:00–20:00 (domestic heating, industrial wind-down)
-      - Morning peak ~07:00–09:00
-      - Night trough
+Layer 3a — Demand intra-day shape (deterministic)
+    24-element additive vector, separate weekday/weekend profiles.  Bimodal
+    weekday pattern (morning peak ~08:00, evening peak ~18:00) with a flat
+    midday plateau on the linear envelope between the two peaks.  No baked-in
+    "solar dip" — that effect now belongs entirely to layers 3b + 4.
+    A mild seasonal uplift amplifies the curve in winter (heating demand).
+
+Layer 3b — Wind supply suppression (stochastic, per Monte Carlo path)
+    wind_cf(t) ∈ (0, 1) is an AR(1) process in logit-space, with monthly means
+    reflecting Dutch wind climatology (winter > summer) and a small diurnal
+    adder (overnight slightly higher, mid-afternoon slightly lower).
+    layer3b(t) = −β(year) × (wind_cf(t) − reference_cf)
+    β grows linearly 2027→2036 reflecting NL offshore-wind buildout.  Above-
+    mean wind suppresses prices, below-mean lifts them.
 
 Layer 4 — Solar cannibalisation
     cannibalisation(t) = −α(year) × solar_proxy(t) × modulation(t)
     solar_proxy peaks at noon in mid-summer (all NL panels generate together).
     α grows linearly from 2027→2036 reflecting continued solar build-out.
     modulation(t) ties the dip to the realised asset cloud factor via
-    ρ = market.production_cannibalisation_correlation. On a clear-sky day
-    cloud_factor > monthly mean → modulation > 1 → deeper dip; on overcast
-    days the dip shrinks. ρ = 0 reproduces the legacy purely-diurnal layer.
-    Critical for capture-rate erosion: mid-summer noon prices start ~45 EUR/MWh
-    in 2027 and can go negative by 2034.
+    ρ = market.production_cannibalisation_correlation.  Critical for
+    capture-rate erosion: mid-summer noon prices start ~45 EUR/MWh in 2027 and
+    can go negative by 2034.
 
 Layer 5 — AR(1) autocorrelated noise
     noise(t) = φ × noise(t-1) + σ_innov × ε(t),  ε ~ N(0,1)
     φ = 0.70 → half-life ≈ 2 hours; creates realistic price clustering.
-    Without autocorrelation, Monte Carlo underestimates revenue volatility.
 
 Calibration targets
 -------------------
@@ -49,9 +57,10 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
+from scipy.special import logit
 
 from ppa_engine.config import PPAConfig
-from ppa_engine.utils.ar1 import ar1_process
+from ppa_engine.utils.ar1 import ar1_logit_process, ar1_process
 
 
 def _build_timestamps(config: PPAConfig) -> pd.DatetimeIndex:
@@ -83,22 +92,101 @@ def _layer2_seasonal(times: pd.DatetimeIndex, config: PPAConfig) -> np.ndarray:
     )
 
 
-def _layer3_intraday(times: pd.DatetimeIndex, config: PPAConfig) -> np.ndarray:
+def _layer3a_demand(times: pd.DatetimeIndex, config: PPAConfig) -> np.ndarray:
     """
-    Intra-day shape adder [EUR/MWh].
+    Demand intra-day shape adder [EUR/MWh].
 
-    Uses two 24-element vectors (weekday, weekend) from config.
-    Weekday profile has a pronounced evening peak (~17:00) reflecting
-    European industrial and residential demand patterns.
+    Deterministic — depends only on hour-of-day, day-of-week, and day-of-year
+    (for the mild winter uplift). Uses two 24-element shape vectors from
+    config.market.demand_weekday_shape / demand_weekend_shape. The weekday
+    shape is bimodal (morning + evening peaks) with no embedded midday dip:
+    the noon plateau sits between the morning and evening peaks rather than
+    below them. Any midday price suppression must come from layers 3b + 4.
     """
     mc = config.market
-    wd_arr = np.array(mc.weekday_hourly_adder)
-    we_arr = np.array(mc.weekend_hourly_adder)
+    wd_arr = np.array(mc.demand_weekday_shape, dtype=float)
+    we_arr = np.array(mc.demand_weekend_shape, dtype=float)
 
     hours = np.array([t.hour for t in times], dtype=int)
     is_weekend = np.array([t.dayofweek >= 5 for t in times])
+    base = np.where(is_weekend, we_arr[hours], wd_arr[hours])
 
-    return np.where(is_weekend, we_arr[hours], wd_arr[hours])
+    doy = np.array([t.dayofyear for t in times], dtype=float)
+    seasonal_uplift = 1.0 + mc.demand_winter_uplift * np.cos(
+        2.0 * np.pi * (doy - mc.demand_peak_day) / 365.25
+    )
+    return base * seasonal_uplift
+
+
+def compute_wind_factor(
+    times: pd.DatetimeIndex,
+    config: PPAConfig,
+    seed: int | None = None,
+) -> np.ndarray:
+    """
+    Public helper returning a stochastic Dutch system-wide wind capacity
+    factor in (0, 1), the same length as ``times``.
+
+    The latent process is a stationary AR(1) in logit-space (φ ≈ 0.95 for
+    multi-day persistence). The monthly mean reflects Dutch climatology
+    (winter > summer); a small diurnal adder in logit-space mildly raises
+    overnight values and depresses mid-afternoon values.
+
+    Used by ``_layer3b_wind_supply``. Exposed publicly so the Monte Carlo
+    orchestrator can pre-compute one per path and pass it in.
+    """
+    mc = config.market
+    monthly_logit = np.array([logit(m) for m in mc.monthly_wind_means])
+    months = np.array([t.month - 1 for t in times], dtype=int)
+    hours = np.array([t.hour for t in times], dtype=int)
+    diurnal = np.array(mc.wind_diurnal_logit_adder, dtype=float)
+    logit_mean = monthly_logit[months] + diurnal[hours]
+    return ar1_logit_process(
+        n=len(times),
+        phi=mc.wind_cf_phi,
+        logit_scale=mc.wind_cf_logit_scale,
+        monthly_logit_means=logit_mean,
+        seed=mc.wind_seed if seed is None else seed,
+    )
+
+
+def _layer3b_wind_supply(
+    times: pd.DatetimeIndex,
+    config: PPAConfig,
+    wind_cf: np.ndarray | None = None,
+    seed: int | None = None,
+) -> np.ndarray:
+    """
+    Wind supply suppression term [EUR/MWh].
+
+    layer3b(t) = −β(year) × (wind_cf(t) − reference_cf)
+
+    Above-mean wind realisations suppress prices; below-mean realisations lift
+    them. β(year) grows linearly from beta_wind_2027 to beta_wind_2036 to
+    reflect Dutch offshore-wind buildout.
+
+    Parameters
+    ----------
+    wind_cf :
+        Pre-computed wind capacity factor, same length as ``times``. When
+        omitted, a fresh AR(1) draw is taken via ``compute_wind_factor``
+        with ``seed`` (or ``config.market.wind_seed`` if seed is None).
+    """
+    mc = config.market
+    start_year = pd.Timestamp(config.deal.start_date).year
+    end_year = pd.Timestamp(config.deal.end_date).year
+    tenor = max(end_year - start_year, 1)
+
+    if wind_cf is None:
+        wind_cf = compute_wind_factor(times, config, seed=seed)
+
+    years = np.array([t.year - start_year for t in times], dtype=float)
+    beta = mc.beta_wind_2027 + (
+        mc.beta_wind_2036 - mc.beta_wind_2027
+    ) * years / tenor
+
+    deviation = np.asarray(wind_cf, dtype=float) - mc.wind_reference_cf
+    return -beta * deviation
 
 
 def _layer4_cannibalisation(
@@ -209,7 +297,7 @@ def generate_market_prices(config: PPAConfig | None = None) -> pd.Series:
 
     times = _build_timestamps(config)
 
-    # Layer 4 is now conditional on the asset's cloud factor when
+    # Layer 4 is conditional on the asset's cloud factor when
     # production_cannibalisation_correlation > 0, so production and prices
     # share the same realised weather. Using the solar seed keeps the central
     # price scenario coherent with the central solar production series.
@@ -221,12 +309,16 @@ def generate_market_prices(config: PPAConfig | None = None) -> pd.Series:
         else None
     )
 
+    # Layer 3b draws an independent AR(1) wind factor using config.market.wind_seed.
+    wind_cf = compute_wind_factor(times, config)
+
     layer1 = _layer1_level(times, config)
     layer2 = _layer2_seasonal(times, config)
-    layer3 = _layer3_intraday(times, config)
+    layer3a = _layer3a_demand(times, config)
+    layer3b = _layer3b_wind_supply(times, config, wind_cf=wind_cf)
     layer4 = _layer4_cannibalisation(times, config, cloud_factor=cloud)
     layer5 = _layer5_ar1_noise(times, config)
 
-    prices = layer1 + layer2 + layer3 + layer4 + layer5
+    prices = layer1 + layer2 + layer3a + layer3b + layer4 + layer5
 
     return pd.Series(prices, index=times, name="market_price_eur_mwh")

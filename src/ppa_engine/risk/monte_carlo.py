@@ -31,8 +31,10 @@ from ppa_engine.data.market_prices import (
     _build_timestamps,
     _layer1_level,
     _layer2_seasonal,
-    _layer3_intraday,
+    _layer3a_demand,
+    _layer3b_wind_supply,
     _layer4_cannibalisation,
+    compute_wind_factor,
 )
 from ppa_engine.data.solar_production import _clearsky_poa, compute_cloud_factor
 from ppa_engine.utils.ar1 import ar1_process
@@ -46,6 +48,8 @@ _JOINT_SOLAR_BASE = 101_000
 _JOINT_PRICE_BASE = 202_000
 _PRICE_PRICE_BASE = 303_000
 _VOLUME_SOLAR_BASE = 404_000
+_JOINT_WIND_BASE = 505_000
+_PRICE_WIND_BASE = 606_000
 _PATH_PRIME = 1_000_003  # Large prime for per-path derivation
 
 
@@ -94,6 +98,15 @@ def _cloud_series(
     return compute_cloud_factor(times, config, seed=seed)
 
 
+def _wind_series(
+    times: pd.DatetimeIndex,
+    config: PPAConfig,
+    seed: int,
+) -> np.ndarray:
+    """Per-path wind capacity factor — drives layer 3b on the price side."""
+    return compute_wind_factor(times, config, seed=seed)
+
+
 def _solar_from_cloud(
     times: pd.DatetimeIndex,
     poa_clearsky: np.ndarray,
@@ -114,20 +127,24 @@ def _solar_from_cloud(
 
 def _price_series(
     times: pd.DatetimeIndex,
-    deterministic_layers_1_3: np.ndarray,
+    deterministic_layers_1_2_3a: np.ndarray,
     config: PPAConfig,
     seed: int,
     cloud_factor: np.ndarray | None = None,
+    wind_factor: np.ndarray | None = None,
 ) -> pd.Series:
     """
     Generate one price path for a given noise seed.
 
-    ``deterministic_layers_1_3`` is the cached sum of layers 1–3 (the parts
-    that do NOT depend on the realised cloud). Layer 4 is recomputed with the
-    supplied ``cloud_factor`` so the midday dip co-moves with production when
+    ``deterministic_layers_1_2_3a`` is the cached sum of layers 1, 2 and 3a
+    (the parts that do NOT depend on realised weather). Layer 3b is computed
+    from the supplied ``wind_factor`` (above-mean wind suppresses prices);
+    layer 4 is recomputed with the supplied ``cloud_factor`` so the midday
+    dip co-moves with production when
     ``market.production_cannibalisation_correlation`` > 0.
     """
     mc = config.market
+    layer3b = _layer3b_wind_supply(times, config, wind_cf=wind_factor)
     layer4 = _layer4_cannibalisation(times, config, cloud_factor=cloud_factor)
     noise = ar1_process(
         n=len(times),
@@ -136,7 +153,7 @@ def _price_series(
         seed=seed,
     )
     return pd.Series(
-        deterministic_layers_1_3 + layer4 + noise,
+        deterministic_layers_1_2_3a + layer3b + layer4 + noise,
         index=times,
         name="market_price_eur_mwh",
     )
@@ -152,7 +169,7 @@ def _run_ensemble(
     times: pd.DatetimeIndex,
     poa_clearsky: np.ndarray,
     degradation: np.ndarray,
-    deterministic_price_1_3: np.ndarray,
+    deterministic_price_1_2_3a: np.ndarray,
     load: pd.Series,
     config: PPAConfig,
     n_paths: int,
@@ -160,16 +177,21 @@ def _run_ensemble(
     central_solar: pd.Series,
     central_prices: pd.Series,
     central_cloud: np.ndarray,
+    central_wind: np.ndarray,
 ) -> pd.DataFrame:
     """
     Run n_paths for one decomposition mode.
 
-    mode='joint'  — independent solar and price seeds; layer 4 uses path cloud
-    mode='price'  — solar fixed at central; layer 4 uses central cloud
-    mode='volume' — solar varies; layer 4 ALSO uses the path cloud, so the
-                    midday dip co-moves with production via ρ. Layer-5 noise
-                    stays at the central seed so this ensemble isolates the
-                    volume-driven (and correlated) component of revenue risk.
+    mode='joint'  — independent solar, wind and price-noise seeds; layer 3b
+                    uses the path wind factor, layer 4 uses the path cloud.
+    mode='price'  — solar fixed at central; layer 3b uses an independent
+                    per-path wind factor (price-side weather risk); layer 4
+                    uses the central cloud.
+    mode='volume' — solar varies (cloud varies); layer 4 ALSO uses the path
+                    cloud, so the midday dip co-moves with production via ρ.
+                    Wind is held at the central realisation so this ensemble
+                    isolates the volume-driven (production-side) component
+                    of revenue risk. Layer-5 noise stays at the central seed.
     """
     logger.info("[%s] running %d paths...", mode, n_paths)
 
@@ -185,27 +207,37 @@ def _run_ensemble(
                 times, poa_clearsky, degradation, config, cloud,
             )
             prices = _price_series(
-                times, deterministic_price_1_3, config,
-                config.market.seed, cloud_factor=cloud,
+                times, deterministic_price_1_2_3a, config,
+                config.market.seed,
+                cloud_factor=cloud,
+                wind_factor=central_wind,
             )
         elif mode == "price":
             solar = central_solar
+            wind = _wind_series(
+                times, config, _PRICE_WIND_BASE + i * _PATH_PRIME,
+            )
             prices = _price_series(
-                times, deterministic_price_1_3, config,
+                times, deterministic_price_1_2_3a, config,
                 _PRICE_PRICE_BASE + i * _PATH_PRIME,
                 cloud_factor=central_cloud,
+                wind_factor=wind,
             )
         else:  # joint
             cloud = _cloud_series(
                 times, config, _JOINT_SOLAR_BASE + i * _PATH_PRIME,
             )
+            wind = _wind_series(
+                times, config, _JOINT_WIND_BASE + i * _PATH_PRIME,
+            )
             solar = _solar_from_cloud(
                 times, poa_clearsky, degradation, config, cloud,
             )
             prices = _price_series(
-                times, deterministic_price_1_3, config,
+                times, deterministic_price_1_2_3a, config,
                 _JOINT_PRICE_BASE + i * _PATH_PRIME,
                 cloud_factor=cloud,
+                wind_factor=wind,
             )
 
         combo = value_all_combinations(solar, load, prices, config, base_strike=base_strike)
@@ -267,8 +299,11 @@ def run_monte_carlo(
     -------------------------------------------------------------
     joint  mode: solar_seed_i = 101_000 + i*1_000_003
                  price_seed_i = 202_000 + i*1_000_003
+                 wind_seed_i  = 505_000 + i*1_000_003
     price  mode: price_seed_i = 303_000 + i*1_000_003
+                 wind_seed_i  = 606_000 + i*1_000_003
     volume mode: solar_seed_i = 404_000 + i*1_000_003
+                 (wind held at central realisation)
     """
     from ppa_engine.config import DEFAULT_CONFIG
 
@@ -304,27 +339,30 @@ def run_monte_carlo(
     year_offset = np.array([t.year - start_year for t in times])
     degradation = 1.0 - config.solar.degradation_rate * year_offset
 
-    # Layers 1-3 are independent of the cloud factor and can be cached. Layer
-    # 4 is recomputed per path (or per central scenario) so it can be
-    # modulated by the realised cloud factor.
-    deterministic_price_1_3 = (
+    # Layers 1, 2 and 3a are independent of realised weather and can be
+    # cached. Layer 3b is recomputed per path from the realised wind factor,
+    # and layer 4 is recomputed per path from the realised cloud factor.
+    deterministic_price_1_2_3a = (
         _layer1_level(times, config)
         + _layer2_seasonal(times, config)
-        + _layer3_intraday(times, config)
+        + _layer3a_demand(times, config)
     )
 
     load = generate_consumer_load(config)
 
-    # Step 3: central scenario at base seeds. The central cloud is also
-    # what 'price' mode uses to anchor its layer-4 dip.
+    # Step 3: central scenario at base seeds. The central cloud anchors
+    # 'price' mode's layer-4 dip; the central wind anchors 'volume' mode's
+    # layer-3b suppression.
     logger.info("Computing central scenario...")
     central_cloud = _cloud_series(times, config, config.solar.seed)
+    central_wind = _wind_series(times, config, config.market.wind_seed)
     central_solar = _solar_from_cloud(
         times, poa_clearsky, degradation, config, central_cloud,
     )
     central_prices = _price_series(
-        times, deterministic_price_1_3, config, config.market.seed,
+        times, deterministic_price_1_2_3a, config, config.market.seed,
         cloud_factor=central_cloud,
+        wind_factor=central_wind,
     )
     central_df = value_all_combinations(
         central_solar, load, central_prices, config, base_strike=base_strike
@@ -334,9 +372,9 @@ def run_monte_carlo(
     frames: list[pd.DataFrame] = []
     for mode in modes:
         df = _run_ensemble(
-            mode, times, poa_clearsky, degradation, deterministic_price_1_3,
+            mode, times, poa_clearsky, degradation, deterministic_price_1_2_3a,
             load, config, n_paths, base_strike, central_solar, central_prices,
-            central_cloud,
+            central_cloud, central_wind,
         )
         frames.append(df)
 

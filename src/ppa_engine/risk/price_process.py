@@ -24,9 +24,12 @@ from ppa_engine.config import PPAConfig
 from ppa_engine.data.market_prices import (
     _layer1_level,
     _layer2_seasonal,
-    _layer3_intraday,
+    _layer3a_demand,
+    _layer3b_wind_supply,
     _layer4_cannibalisation,
+    compute_wind_factor,
 )
+from ppa_engine.data.solar_production import compute_cloud_factor
 from ppa_engine.utils.ar1 import ar1_noise_matrix as _shared_ar1_noise_matrix
 
 # Large prime for per-path seed derivation; prevents seed collisions across paths
@@ -54,18 +57,35 @@ def _ar1_noise_matrix(
 def build_deterministic_price(
     times: pd.DatetimeIndex,
     config: PPAConfig,
+    wind_cf: np.ndarray | None = None,
+    cloud_factor: np.ndarray | None = None,
 ) -> np.ndarray:
     """
-    Compute the sum of price layers 1–4 (fully deterministic).
+    Compute the sum of price layers 1, 2, 3a, 3b and 4 — the full price
+    signal excluding the AR(1) noise (layer 5).
 
-    Shape: (T,). This is the base signal that all stochastic paths share.
-    Compute once and pass into simulate_price_paths to avoid redundant work.
+    Shape: (T,). All stochastic paths share this signal when layer 5 is the
+    only source of variation.  When ``wind_cf`` / ``cloud_factor`` are not
+    supplied, central deterministic realisations are drawn from the
+    configured seeds so the helper still returns a single fixed array.
+
+    Compute once and pass into ``simulate_price_paths`` to avoid redundant
+    work.
     """
+    if wind_cf is None:
+        wind_cf = compute_wind_factor(times, config)
+    if (
+        cloud_factor is None
+        and config.market.production_cannibalisation_correlation > 0.0
+    ):
+        cloud_factor = compute_cloud_factor(times, config)
+
     return (
         _layer1_level(times, config)
         + _layer2_seasonal(times, config)
-        + _layer3_intraday(times, config)
-        + _layer4_cannibalisation(times, config)
+        + _layer3a_demand(times, config)
+        + _layer3b_wind_supply(times, config, wind_cf=wind_cf)
+        + _layer4_cannibalisation(times, config, cloud_factor=cloud_factor)
     )
 
 

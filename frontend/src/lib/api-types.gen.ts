@@ -362,15 +362,13 @@ export interface components {
              *       "market": {
              *         "ar1_phi": 0.7,
              *         "ar1_sigma": 8,
-             *         "base_price": 80,
-             *         "cannibalisation_alpha_2027": 55,
-             *         "cannibalisation_alpha_2036": 90,
-             *         "drift": -1.5,
-             *         "production_cannibalisation_correlation": 0.65,
-             *         "seasonal_amplitude": 15,
-             *         "seasonal_peak_day": 15,
-             *         "seed": 42,
-             *         "weekday_hourly_adder": [
+             *         "base_price": 83,
+             *         "beta_wind_2027": 35,
+             *         "beta_wind_2036": 75,
+             *         "cannibalisation_alpha_2027": 70,
+             *         "cannibalisation_alpha_2036": 115,
+             *         "demand_peak_day": 15,
+             *         "demand_weekday_shape": [
              *           -10,
              *           -12,
              *           -14,
@@ -380,14 +378,14 @@ export interface components {
              *           -8,
              *           8,
              *           20,
-             *           14,
-             *           8,
-             *           2,
-             *           -5,
-             *           -5,
-             *           0,
-             *           8,
+             *           18,
              *           15,
+             *           13,
+             *           11,
+             *           10,
+             *           10,
+             *           12,
+             *           18,
              *           35,
              *           30,
              *           22,
@@ -396,7 +394,7 @@ export interface components {
              *           0,
              *           -8
              *         ],
-             *         "weekend_hourly_adder": [
+             *         "demand_weekend_shape": [
              *           -12,
              *           -14,
              *           -16,
@@ -408,12 +406,12 @@ export interface components {
              *           2,
              *           5,
              *           8,
+             *           9,
+             *           9,
              *           8,
-             *           2,
-             *           2,
-             *           2,
-             *           4,
-             *           6,
+             *           8,
+             *           8,
+             *           9,
              *           10,
              *           12,
              *           10,
@@ -421,7 +419,57 @@ export interface components {
              *           2,
              *           -2,
              *           -10
-             *         ]
+             *         ],
+             *         "demand_winter_uplift": 0.15,
+             *         "drift": -1.5,
+             *         "monthly_wind_means": [
+             *           0.42,
+             *           0.4,
+             *           0.38,
+             *           0.33,
+             *           0.28,
+             *           0.25,
+             *           0.24,
+             *           0.25,
+             *           0.3,
+             *           0.36,
+             *           0.4,
+             *           0.43
+             *         ],
+             *         "production_cannibalisation_correlation": 0.65,
+             *         "seasonal_amplitude": 15,
+             *         "seasonal_peak_day": 15,
+             *         "seed": 42,
+             *         "wind_cf_logit_scale": 0.6,
+             *         "wind_cf_phi": 0.95,
+             *         "wind_diurnal_logit_adder": [
+             *           0.1,
+             *           0.1,
+             *           0.1,
+             *           0.1,
+             *           0.1,
+             *           0.08,
+             *           0.05,
+             *           0.02,
+             *           -0.02,
+             *           -0.05,
+             *           -0.07,
+             *           -0.09,
+             *           -0.1,
+             *           -0.1,
+             *           -0.09,
+             *           -0.07,
+             *           -0.05,
+             *           -0.02,
+             *           0.02,
+             *           0.05,
+             *           0.07,
+             *           0.08,
+             *           0.1,
+             *           0.1
+             *         ],
+             *         "wind_reference_cf": 0.33,
+             *         "wind_seed": 43
              *       },
              *       "load": {
              *         "annual_consumption_gwh": 100,
@@ -571,7 +619,7 @@ export interface components {
         MarketPriceConfigSchema: {
             /**
              * Base Price
-             * @default 80
+             * @default 83
              */
             base_price: number;
             /**
@@ -590,7 +638,7 @@ export interface components {
              */
             seasonal_peak_day: number;
             /**
-             * Weekday Hourly Adder
+             * Demand Weekday Shape
              * @default [
              *       -10,
              *       -12,
@@ -601,14 +649,14 @@ export interface components {
              *       -8,
              *       8,
              *       20,
-             *       14,
-             *       8,
-             *       2,
-             *       -5,
-             *       -5,
-             *       0,
-             *       8,
+             *       18,
              *       15,
+             *       13,
+             *       11,
+             *       10,
+             *       10,
+             *       12,
+             *       18,
              *       35,
              *       30,
              *       22,
@@ -618,9 +666,9 @@ export interface components {
              *       -8
              *     ]
              */
-            weekday_hourly_adder: number[];
+            demand_weekday_shape: number[];
             /**
-             * Weekend Hourly Adder
+             * Demand Weekend Shape
              * @default [
              *       -12,
              *       -14,
@@ -633,12 +681,12 @@ export interface components {
              *       2,
              *       5,
              *       8,
+             *       9,
+             *       9,
              *       8,
-             *       2,
-             *       2,
-             *       2,
-             *       4,
-             *       6,
+             *       8,
+             *       8,
+             *       9,
              *       10,
              *       12,
              *       10,
@@ -648,15 +696,103 @@ export interface components {
              *       -10
              *     ]
              */
-            weekend_hourly_adder: number[];
+            demand_weekend_shape: number[];
+            /**
+             * Demand Winter Uplift
+             * @default 0.15
+             */
+            demand_winter_uplift: number;
+            /**
+             * Demand Peak Day
+             * @default 15
+             */
+            demand_peak_day: number;
+            /**
+             * Monthly Wind Means
+             * @default [
+             *       0.42,
+             *       0.4,
+             *       0.38,
+             *       0.33,
+             *       0.28,
+             *       0.25,
+             *       0.24,
+             *       0.25,
+             *       0.3,
+             *       0.36,
+             *       0.4,
+             *       0.43
+             *     ]
+             */
+            monthly_wind_means: number[];
+            /**
+             * Wind Diurnal Logit Adder
+             * @default [
+             *       0.1,
+             *       0.1,
+             *       0.1,
+             *       0.1,
+             *       0.1,
+             *       0.08,
+             *       0.05,
+             *       0.02,
+             *       -0.02,
+             *       -0.05,
+             *       -0.07,
+             *       -0.09,
+             *       -0.1,
+             *       -0.1,
+             *       -0.09,
+             *       -0.07,
+             *       -0.05,
+             *       -0.02,
+             *       0.02,
+             *       0.05,
+             *       0.07,
+             *       0.08,
+             *       0.1,
+             *       0.1
+             *     ]
+             */
+            wind_diurnal_logit_adder: number[];
+            /**
+             * Wind Cf Phi
+             * @default 0.95
+             */
+            wind_cf_phi: number;
+            /**
+             * Wind Cf Logit Scale
+             * @default 0.6
+             */
+            wind_cf_logit_scale: number;
+            /**
+             * Wind Reference Cf
+             * @default 0.33
+             */
+            wind_reference_cf: number;
+            /**
+             * Beta Wind 2027
+             * @default 35
+             */
+            beta_wind_2027: number;
+            /**
+             * Beta Wind 2036
+             * @default 75
+             */
+            beta_wind_2036: number;
+            /**
+             * Wind Seed
+             * @default 43
+             */
+            wind_seed: number;
             /**
              * Cannibalisation Alpha 2027
-             * @default 55
+             * @default 70
              */
             cannibalisation_alpha_2027: number;
             /**
              * Cannibalisation Alpha 2036
-             * @default 90
+             * @default 115
              */
             cannibalisation_alpha_2036: number;
             /**
@@ -756,15 +892,13 @@ export interface components {
              *       "market": {
              *         "ar1_phi": 0.7,
              *         "ar1_sigma": 8,
-             *         "base_price": 80,
-             *         "cannibalisation_alpha_2027": 55,
-             *         "cannibalisation_alpha_2036": 90,
-             *         "drift": -1.5,
-             *         "production_cannibalisation_correlation": 0.65,
-             *         "seasonal_amplitude": 15,
-             *         "seasonal_peak_day": 15,
-             *         "seed": 42,
-             *         "weekday_hourly_adder": [
+             *         "base_price": 83,
+             *         "beta_wind_2027": 35,
+             *         "beta_wind_2036": 75,
+             *         "cannibalisation_alpha_2027": 70,
+             *         "cannibalisation_alpha_2036": 115,
+             *         "demand_peak_day": 15,
+             *         "demand_weekday_shape": [
              *           -10,
              *           -12,
              *           -14,
@@ -774,14 +908,14 @@ export interface components {
              *           -8,
              *           8,
              *           20,
-             *           14,
-             *           8,
-             *           2,
-             *           -5,
-             *           -5,
-             *           0,
-             *           8,
+             *           18,
              *           15,
+             *           13,
+             *           11,
+             *           10,
+             *           10,
+             *           12,
+             *           18,
              *           35,
              *           30,
              *           22,
@@ -790,7 +924,7 @@ export interface components {
              *           0,
              *           -8
              *         ],
-             *         "weekend_hourly_adder": [
+             *         "demand_weekend_shape": [
              *           -12,
              *           -14,
              *           -16,
@@ -802,12 +936,12 @@ export interface components {
              *           2,
              *           5,
              *           8,
+             *           9,
+             *           9,
              *           8,
-             *           2,
-             *           2,
-             *           2,
-             *           4,
-             *           6,
+             *           8,
+             *           8,
+             *           9,
              *           10,
              *           12,
              *           10,
@@ -815,7 +949,57 @@ export interface components {
              *           2,
              *           -2,
              *           -10
-             *         ]
+             *         ],
+             *         "demand_winter_uplift": 0.15,
+             *         "drift": -1.5,
+             *         "monthly_wind_means": [
+             *           0.42,
+             *           0.4,
+             *           0.38,
+             *           0.33,
+             *           0.28,
+             *           0.25,
+             *           0.24,
+             *           0.25,
+             *           0.3,
+             *           0.36,
+             *           0.4,
+             *           0.43
+             *         ],
+             *         "production_cannibalisation_correlation": 0.65,
+             *         "seasonal_amplitude": 15,
+             *         "seasonal_peak_day": 15,
+             *         "seed": 42,
+             *         "wind_cf_logit_scale": 0.6,
+             *         "wind_cf_phi": 0.95,
+             *         "wind_diurnal_logit_adder": [
+             *           0.1,
+             *           0.1,
+             *           0.1,
+             *           0.1,
+             *           0.1,
+             *           0.08,
+             *           0.05,
+             *           0.02,
+             *           -0.02,
+             *           -0.05,
+             *           -0.07,
+             *           -0.09,
+             *           -0.1,
+             *           -0.1,
+             *           -0.09,
+             *           -0.07,
+             *           -0.05,
+             *           -0.02,
+             *           0.02,
+             *           0.05,
+             *           0.07,
+             *           0.08,
+             *           0.1,
+             *           0.1
+             *         ],
+             *         "wind_reference_cf": 0.33,
+             *         "wind_seed": 43
              *       },
              *       "load": {
              *         "annual_consumption_gwh": 100,
@@ -1022,15 +1206,13 @@ export interface components {
              *       "market": {
              *         "ar1_phi": 0.7,
              *         "ar1_sigma": 8,
-             *         "base_price": 80,
-             *         "cannibalisation_alpha_2027": 55,
-             *         "cannibalisation_alpha_2036": 90,
-             *         "drift": -1.5,
-             *         "production_cannibalisation_correlation": 0.65,
-             *         "seasonal_amplitude": 15,
-             *         "seasonal_peak_day": 15,
-             *         "seed": 42,
-             *         "weekday_hourly_adder": [
+             *         "base_price": 83,
+             *         "beta_wind_2027": 35,
+             *         "beta_wind_2036": 75,
+             *         "cannibalisation_alpha_2027": 70,
+             *         "cannibalisation_alpha_2036": 115,
+             *         "demand_peak_day": 15,
+             *         "demand_weekday_shape": [
              *           -10,
              *           -12,
              *           -14,
@@ -1040,14 +1222,14 @@ export interface components {
              *           -8,
              *           8,
              *           20,
-             *           14,
-             *           8,
-             *           2,
-             *           -5,
-             *           -5,
-             *           0,
-             *           8,
+             *           18,
              *           15,
+             *           13,
+             *           11,
+             *           10,
+             *           10,
+             *           12,
+             *           18,
              *           35,
              *           30,
              *           22,
@@ -1056,7 +1238,7 @@ export interface components {
              *           0,
              *           -8
              *         ],
-             *         "weekend_hourly_adder": [
+             *         "demand_weekend_shape": [
              *           -12,
              *           -14,
              *           -16,
@@ -1068,12 +1250,12 @@ export interface components {
              *           2,
              *           5,
              *           8,
+             *           9,
+             *           9,
              *           8,
-             *           2,
-             *           2,
-             *           2,
-             *           4,
-             *           6,
+             *           8,
+             *           8,
+             *           9,
              *           10,
              *           12,
              *           10,
@@ -1081,7 +1263,57 @@ export interface components {
              *           2,
              *           -2,
              *           -10
-             *         ]
+             *         ],
+             *         "demand_winter_uplift": 0.15,
+             *         "drift": -1.5,
+             *         "monthly_wind_means": [
+             *           0.42,
+             *           0.4,
+             *           0.38,
+             *           0.33,
+             *           0.28,
+             *           0.25,
+             *           0.24,
+             *           0.25,
+             *           0.3,
+             *           0.36,
+             *           0.4,
+             *           0.43
+             *         ],
+             *         "production_cannibalisation_correlation": 0.65,
+             *         "seasonal_amplitude": 15,
+             *         "seasonal_peak_day": 15,
+             *         "seed": 42,
+             *         "wind_cf_logit_scale": 0.6,
+             *         "wind_cf_phi": 0.95,
+             *         "wind_diurnal_logit_adder": [
+             *           0.1,
+             *           0.1,
+             *           0.1,
+             *           0.1,
+             *           0.1,
+             *           0.08,
+             *           0.05,
+             *           0.02,
+             *           -0.02,
+             *           -0.05,
+             *           -0.07,
+             *           -0.09,
+             *           -0.1,
+             *           -0.1,
+             *           -0.09,
+             *           -0.07,
+             *           -0.05,
+             *           -0.02,
+             *           0.02,
+             *           0.05,
+             *           0.07,
+             *           0.08,
+             *           0.1,
+             *           0.1
+             *         ],
+             *         "wind_reference_cf": 0.33,
+             *         "wind_seed": 43
              *       },
              *       "load": {
              *         "annual_consumption_gwh": 100,
@@ -1316,15 +1548,13 @@ export interface components {
              *       "market": {
              *         "ar1_phi": 0.7,
              *         "ar1_sigma": 8,
-             *         "base_price": 80,
-             *         "cannibalisation_alpha_2027": 55,
-             *         "cannibalisation_alpha_2036": 90,
-             *         "drift": -1.5,
-             *         "production_cannibalisation_correlation": 0.65,
-             *         "seasonal_amplitude": 15,
-             *         "seasonal_peak_day": 15,
-             *         "seed": 42,
-             *         "weekday_hourly_adder": [
+             *         "base_price": 83,
+             *         "beta_wind_2027": 35,
+             *         "beta_wind_2036": 75,
+             *         "cannibalisation_alpha_2027": 70,
+             *         "cannibalisation_alpha_2036": 115,
+             *         "demand_peak_day": 15,
+             *         "demand_weekday_shape": [
              *           -10,
              *           -12,
              *           -14,
@@ -1334,14 +1564,14 @@ export interface components {
              *           -8,
              *           8,
              *           20,
-             *           14,
-             *           8,
-             *           2,
-             *           -5,
-             *           -5,
-             *           0,
-             *           8,
+             *           18,
              *           15,
+             *           13,
+             *           11,
+             *           10,
+             *           10,
+             *           12,
+             *           18,
              *           35,
              *           30,
              *           22,
@@ -1350,7 +1580,7 @@ export interface components {
              *           0,
              *           -8
              *         ],
-             *         "weekend_hourly_adder": [
+             *         "demand_weekend_shape": [
              *           -12,
              *           -14,
              *           -16,
@@ -1362,12 +1592,12 @@ export interface components {
              *           2,
              *           5,
              *           8,
+             *           9,
+             *           9,
              *           8,
-             *           2,
-             *           2,
-             *           2,
-             *           4,
-             *           6,
+             *           8,
+             *           8,
+             *           9,
              *           10,
              *           12,
              *           10,
@@ -1375,7 +1605,57 @@ export interface components {
              *           2,
              *           -2,
              *           -10
-             *         ]
+             *         ],
+             *         "demand_winter_uplift": 0.15,
+             *         "drift": -1.5,
+             *         "monthly_wind_means": [
+             *           0.42,
+             *           0.4,
+             *           0.38,
+             *           0.33,
+             *           0.28,
+             *           0.25,
+             *           0.24,
+             *           0.25,
+             *           0.3,
+             *           0.36,
+             *           0.4,
+             *           0.43
+             *         ],
+             *         "production_cannibalisation_correlation": 0.65,
+             *         "seasonal_amplitude": 15,
+             *         "seasonal_peak_day": 15,
+             *         "seed": 42,
+             *         "wind_cf_logit_scale": 0.6,
+             *         "wind_cf_phi": 0.95,
+             *         "wind_diurnal_logit_adder": [
+             *           0.1,
+             *           0.1,
+             *           0.1,
+             *           0.1,
+             *           0.1,
+             *           0.08,
+             *           0.05,
+             *           0.02,
+             *           -0.02,
+             *           -0.05,
+             *           -0.07,
+             *           -0.09,
+             *           -0.1,
+             *           -0.1,
+             *           -0.09,
+             *           -0.07,
+             *           -0.05,
+             *           -0.02,
+             *           0.02,
+             *           0.05,
+             *           0.07,
+             *           0.08,
+             *           0.1,
+             *           0.1
+             *         ],
+             *         "wind_reference_cf": 0.33,
+             *         "wind_seed": 43
              *       },
              *       "load": {
              *         "annual_consumption_gwh": 100,
@@ -1524,15 +1804,13 @@ export interface components {
              *       "market": {
              *         "ar1_phi": 0.7,
              *         "ar1_sigma": 8,
-             *         "base_price": 80,
-             *         "cannibalisation_alpha_2027": 55,
-             *         "cannibalisation_alpha_2036": 90,
-             *         "drift": -1.5,
-             *         "production_cannibalisation_correlation": 0.65,
-             *         "seasonal_amplitude": 15,
-             *         "seasonal_peak_day": 15,
-             *         "seed": 42,
-             *         "weekday_hourly_adder": [
+             *         "base_price": 83,
+             *         "beta_wind_2027": 35,
+             *         "beta_wind_2036": 75,
+             *         "cannibalisation_alpha_2027": 70,
+             *         "cannibalisation_alpha_2036": 115,
+             *         "demand_peak_day": 15,
+             *         "demand_weekday_shape": [
              *           -10,
              *           -12,
              *           -14,
@@ -1542,14 +1820,14 @@ export interface components {
              *           -8,
              *           8,
              *           20,
-             *           14,
-             *           8,
-             *           2,
-             *           -5,
-             *           -5,
-             *           0,
-             *           8,
+             *           18,
              *           15,
+             *           13,
+             *           11,
+             *           10,
+             *           10,
+             *           12,
+             *           18,
              *           35,
              *           30,
              *           22,
@@ -1558,7 +1836,7 @@ export interface components {
              *           0,
              *           -8
              *         ],
-             *         "weekend_hourly_adder": [
+             *         "demand_weekend_shape": [
              *           -12,
              *           -14,
              *           -16,
@@ -1570,12 +1848,12 @@ export interface components {
              *           2,
              *           5,
              *           8,
+             *           9,
+             *           9,
              *           8,
-             *           2,
-             *           2,
-             *           2,
-             *           4,
-             *           6,
+             *           8,
+             *           8,
+             *           9,
              *           10,
              *           12,
              *           10,
@@ -1583,7 +1861,57 @@ export interface components {
              *           2,
              *           -2,
              *           -10
-             *         ]
+             *         ],
+             *         "demand_winter_uplift": 0.15,
+             *         "drift": -1.5,
+             *         "monthly_wind_means": [
+             *           0.42,
+             *           0.4,
+             *           0.38,
+             *           0.33,
+             *           0.28,
+             *           0.25,
+             *           0.24,
+             *           0.25,
+             *           0.3,
+             *           0.36,
+             *           0.4,
+             *           0.43
+             *         ],
+             *         "production_cannibalisation_correlation": 0.65,
+             *         "seasonal_amplitude": 15,
+             *         "seasonal_peak_day": 15,
+             *         "seed": 42,
+             *         "wind_cf_logit_scale": 0.6,
+             *         "wind_cf_phi": 0.95,
+             *         "wind_diurnal_logit_adder": [
+             *           0.1,
+             *           0.1,
+             *           0.1,
+             *           0.1,
+             *           0.1,
+             *           0.08,
+             *           0.05,
+             *           0.02,
+             *           -0.02,
+             *           -0.05,
+             *           -0.07,
+             *           -0.09,
+             *           -0.1,
+             *           -0.1,
+             *           -0.09,
+             *           -0.07,
+             *           -0.05,
+             *           -0.02,
+             *           0.02,
+             *           0.05,
+             *           0.07,
+             *           0.08,
+             *           0.1,
+             *           0.1
+             *         ],
+             *         "wind_reference_cf": 0.33,
+             *         "wind_seed": 43
              *       },
              *       "load": {
              *         "annual_consumption_gwh": 100,

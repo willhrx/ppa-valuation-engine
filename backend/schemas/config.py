@@ -27,32 +27,61 @@ class SolarConfigSchema(BaseModel):
 
 
 class MarketPriceConfigSchema(BaseModel):
-    base_price: float = 80.0
+    base_price: float = 83.0
     drift: float = -1.5
     seasonal_amplitude: float = 15.0
     seasonal_peak_day: int = 15
-    weekday_hourly_adder: list[float] = Field(
+
+    # Layer 3a — demand intra-day shape (deterministic, no midday dip)
+    demand_weekday_shape: list[float] = Field(
         default=[
             -10, -12, -14, -14, -12, -10,
-             -8,   8,  20,  14,   8,   2,
-             -5,  -5,   0,   8,  15,  35,
+             -8,   8,  20,  18,  15,  13,
+             11,  10,  10,  12,  18,  35,
              30,  22,  14,   5,   0,  -8,
         ],
         min_length=24,
         max_length=24,
     )
-    weekend_hourly_adder: list[float] = Field(
+    demand_weekend_shape: list[float] = Field(
         default=[
             -12, -14, -16, -16, -14, -12,
-            -10,  -5,   2,   5,   8,   8,
-              2,   2,   2,   4,   6,  10,
+            -10,  -5,   2,   5,   8,   9,
+              9,   8,   8,   8,   9,  10,
              12,  10,   6,   2,  -2, -10,
         ],
         min_length=24,
         max_length=24,
     )
-    cannibalisation_alpha_2027: float = 55.0
-    cannibalisation_alpha_2036: float = 90.0
+    demand_winter_uplift: float = 0.15
+    demand_peak_day: int = 15
+
+    # Layer 3b — Dutch system wind capacity factor (stochastic AR(1) in logit-space)
+    monthly_wind_means: list[float] = Field(
+        default=[0.42, 0.40, 0.38, 0.33, 0.28, 0.25,
+                 0.24, 0.25, 0.30, 0.36, 0.40, 0.43],
+        min_length=12,
+        max_length=12,
+    )
+    wind_diurnal_logit_adder: list[float] = Field(
+        default=[
+             0.10,  0.10,  0.10,  0.10,  0.10,  0.08,
+             0.05,  0.02, -0.02, -0.05, -0.07, -0.09,
+            -0.10, -0.10, -0.09, -0.07, -0.05, -0.02,
+             0.02,  0.05,  0.07,  0.08,  0.10,  0.10,
+        ],
+        min_length=24,
+        max_length=24,
+    )
+    wind_cf_phi: float = Field(default=0.95, ge=0.0, lt=1.0)
+    wind_cf_logit_scale: float = 0.60
+    wind_reference_cf: float = Field(default=0.33, gt=0.0, lt=1.0)
+    beta_wind_2027: float = 35.0
+    beta_wind_2036: float = 75.0
+    wind_seed: int = 43
+
+    cannibalisation_alpha_2027: float = 70.0
+    cannibalisation_alpha_2036: float = 115.0
     # ρ ∈ [0, 1]. Couples layer-4 (cannibalisation) depth to the realised
     # asset cloud factor: high-irradiance days get a deeper midday dip,
     # overcast days a shallower one. ρ = 0 reproduces the legacy purely

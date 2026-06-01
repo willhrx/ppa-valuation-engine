@@ -70,12 +70,26 @@ class MarketPriceConfig:
     """
     Dutch day-ahead wholesale electricity price assumptions (EPEX NL).
 
-    Prices are built as a sum of five additive layers (all in EUR/MWh):
-      1. Long-term level + drift         — highest uncertainty, flag in reports
-      2. Seasonal shape                  — winter high, summer low
-      3. Intra-day shape                 — morning/evening peaks, weekday/weekend
-      4. Cannibalisation (solar buildout) — growing midday discount
-      5. AR(1) autocorrelated noise      — realistic price clustering
+    Prices are built as a sum of additive layers (all in EUR/MWh):
+      1.  Long-term level + drift         — highest uncertainty, flag in reports
+      2.  Seasonal shape                  — winter high, summer low
+      3a. Demand intra-day shape          — bimodal weekday/weekend demand, no
+                                            embedded midday dip (deterministic)
+      3b. Wind supply suppression          — stochastic AR(1) wind capacity
+                                            factor; suppresses prices when wind
+                                            generation is above its monthly mean
+      4.  Solar cannibalisation (buildout) — growing midday discount, modulated
+                                            by the asset's cloud factor (ρ)
+      5.  AR(1) autocorrelated noise      — realistic price clustering
+
+    Layer 3 used to be a single hand-coded 24-element hourly adder that baked a
+    midday "dip" into what should have been a demand shape. It is now split:
+    layer 3a is the demand shape (no midday dip — the noon plateau lies on the
+    envelope between the morning and afternoon peaks), and layer 3b is a wind
+    supply proxy that suppresses prices when realised Dutch wind output is
+    above its monthly climatological mean. Together with layer 4 (solar
+    cannibalisation), layer 3b completes the renewable-supply picture; demand
+    is now isolated in layer 3a.
 
     Calibration targets (central scenario):
       - Annual average: ~80 EUR/MWh in 2027, declining to ~60 EUR/MWh by 2036
@@ -90,36 +104,73 @@ class MarketPriceConfig:
       - drift: -3 to 0 EUR/MWh/year
       - ar1_phi: 0.5 – 0.9
       - ar1_sigma: 5 – 15 EUR/MWh
+      - beta_wind_2027 / beta_wind_2036: 20 – 80 EUR/MWh per unit-CF deviation
     """
 
     # Layer 1
-    base_price: float = 80.0       # EUR/MWh, long-run level in 2027
+    base_price: float = 83.0       # EUR/MWh, long-run level in 2027
     drift: float = -1.5            # EUR/MWh per year
 
     # Layer 2
     seasonal_amplitude: float = 15.0   # EUR/MWh peak-to-trough / 2
     seasonal_peak_day: int = 15        # day-of-year with highest prices (mid-Jan)
 
-    # Layer 3 — intra-day adders (EUR/MWh) relative to daily level
-    # Indexed 00–23.  Weekday: industrial demand pattern with morning + evening peak.
-    # Weekend: flatter, lower overall.
-    weekday_hourly_adder: List[float] = field(default_factory=lambda: [
-        -10, -12, -14, -14, -12, -10,   # 00–05  night
-         -8,   8,  20,  14,   8,   2,   # 06–11  morning ramp + peak
-         -5,  -5,   0,   8,  15,  35,   # 12–17  midday dip → evening ramp
+    # ---- Layer 3a — demand intra-day shape (deterministic) ----------------
+    # Two 24-element vectors of EUR/MWh demand-driven adders. Indexed 00–23.
+    # Weekday: bimodal industrial+residential pattern with a morning peak
+    # around 08:00 and a steeper evening peak around 18:00. The midday plateau
+    # (11:00–14:00) sits on the linear envelope between the two peaks — no
+    # local minimum at noon. Weekend: flatter, lower overall.
+    demand_weekday_shape: List[float] = field(default_factory=lambda: [
+        -10, -12, -14, -14, -12, -10,   # 00–05  night trough
+         -8,   8,  20,  18,  15,  13,   # 06–11  morning ramp + peak, holds
+         11,  10,  10,  12,  18,  35,   # 12–17  plateau → afternoon ramp → peak
          30,  22,  14,   5,   0,  -8,   # 18–23  evening peak → decline
     ])
-    weekend_hourly_adder: List[float] = field(default_factory=lambda: [
+    demand_weekend_shape: List[float] = field(default_factory=lambda: [
         -12, -14, -16, -16, -14, -12,   # 00–05
-        -10,  -5,   2,   5,   8,   8,   # 06–11
-          2,   2,   2,   4,   6,  10,   # 12–17
+        -10,  -5,   2,   5,   8,   9,   # 06–11
+          9,   8,   8,   8,   9,  10,   # 12–17  flat midday plateau
          12,  10,   6,   2,  -2, -10,   # 18–23
     ])
+    # Mild winter uplift on the demand shape (heating demand).
+    demand_winter_uplift: float = 0.15        # fractional amplitude
+    demand_peak_day: int = 15                 # day-of-year of peak demand (mid-Jan)
+
+    # ---- Layer 3b — wind supply suppression (stochastic) ------------------
+    # The wind capacity factor is an AR(1) process in logit-space (analogous
+    # to the cloud factor), so values stay in (0, 1).  φ ≈ 0.95 reflects
+    # multi-day persistence of synoptic wind systems over the NL grid.
+    # Dutch wind climatology: higher in winter, lower in summer.
+    monthly_wind_means: List[float] = field(default_factory=lambda: [
+        0.42, 0.40, 0.38, 0.33, 0.28, 0.25,   # Jan–Jun
+        0.24, 0.25, 0.30, 0.36, 0.40, 0.43,   # Jul–Dec
+    ])
+    # Small diurnal adder in logit-space; positive overnight, negative around
+    # mid-afternoon (onshore wind is mildly anti-correlated with solar).
+    wind_diurnal_logit_adder: List[float] = field(default_factory=lambda: [
+         0.10,  0.10,  0.10,  0.10,  0.10,  0.08,  # 00–05
+         0.05,  0.02, -0.02, -0.05, -0.07, -0.09,  # 06–11
+        -0.10, -0.10, -0.09, -0.07, -0.05, -0.02,  # 12–17
+         0.02,  0.05,  0.07,  0.08,  0.10,  0.10,  # 18–23
+    ])
+    wind_cf_phi: float = 0.95               # AR(1) autocorrelation
+    wind_cf_logit_scale: float = 0.60       # spread of latent AR(1) in logit
+    wind_reference_cf: float = 0.33         # subtract from CF before scaling
+    # beta_wind grows linearly 2027→2036, reflecting NL offshore-wind buildout.
+    # Calibrated as a free knob so that combined (3b + 4) reproduces the
+    # capture-rate envelope 0.65–0.85 declining.
+    beta_wind_2027: float = 35.0            # EUR/MWh per unit-CF deviation
+    beta_wind_2036: float = 75.0            # grows to this by 2036
+    wind_seed: int = 43                     # separate from other seeds
 
     # Layer 4 — cannibalisation (solar buildout suppressing midday prices)
-    # Calibrated to achieve capture rate ~0.80 in 2027 declining to ~0.65 by 2036
-    cannibalisation_alpha_2027: float = 55.0   # EUR/MWh at full solar proxy
-    cannibalisation_alpha_2036: float = 90.0   # grows linearly to this by 2036
+    # Calibrated to achieve capture rate ~0.85 in 2027 declining to ~0.65 by 2036.
+    # Re-tuned upward (was 55→90) after layer 3 lost its embedded midday dip
+    # in the demand/wind-supply split — layer 4 now carries all solar-driven
+    # cannibalisation pressure.
+    cannibalisation_alpha_2027: float = 70.0   # EUR/MWh at full solar proxy
+    cannibalisation_alpha_2036: float = 115.0  # grows linearly to this by 2036
 
     # Production–cannibalisation correlation (ρ ∈ [0, 1])
     # Dutch solar generation is geographically correlated: when our asset has
@@ -127,6 +178,8 @@ class MarketPriceConfig:
     # ρ = 0  → original behaviour, layer-4 dip is purely diurnal/seasonal.
     # ρ = 1  → midday dip scales linearly with the asset's own cloud factor.
     # Empirical Dutch sky-correlation across the country sits around 0.6–0.75.
+    # NB: ρ modulates only layer 4 (solar). Layer 3b (wind) uses an
+    # independent AR(1) realisation in v1.
     production_cannibalisation_correlation: float = 0.65
 
     # Layer 5 — AR(1) noise
@@ -260,15 +313,40 @@ class PPAConfig:
                 f"(got {len(self.solar.monthly_cloud_means)})."
             )
 
-        if len(self.market.weekday_hourly_adder) != 24:
+        if len(self.market.demand_weekday_shape) != 24:
             raise ValueError(
-                f"market.weekday_hourly_adder must have length 24 "
-                f"(got {len(self.market.weekday_hourly_adder)})."
+                f"market.demand_weekday_shape must have length 24 "
+                f"(got {len(self.market.demand_weekday_shape)})."
             )
-        if len(self.market.weekend_hourly_adder) != 24:
+        if len(self.market.demand_weekend_shape) != 24:
             raise ValueError(
-                f"market.weekend_hourly_adder must have length 24 "
-                f"(got {len(self.market.weekend_hourly_adder)})."
+                f"market.demand_weekend_shape must have length 24 "
+                f"(got {len(self.market.demand_weekend_shape)})."
+            )
+
+        if len(self.market.monthly_wind_means) != 12:
+            raise ValueError(
+                f"market.monthly_wind_means must have length 12 "
+                f"(got {len(self.market.monthly_wind_means)})."
+            )
+        if not all(0.0 < m < 1.0 for m in self.market.monthly_wind_means):
+            raise ValueError(
+                "market.monthly_wind_means entries must all be in (0, 1)."
+            )
+        if len(self.market.wind_diurnal_logit_adder) != 24:
+            raise ValueError(
+                f"market.wind_diurnal_logit_adder must have length 24 "
+                f"(got {len(self.market.wind_diurnal_logit_adder)})."
+            )
+        if not (0.0 <= self.market.wind_cf_phi < 1.0):
+            raise ValueError(
+                f"market.wind_cf_phi must be in [0, 1) "
+                f"(got {self.market.wind_cf_phi})."
+            )
+        if not (0.0 < self.market.wind_reference_cf < 1.0):
+            raise ValueError(
+                f"market.wind_reference_cf must be in (0, 1) "
+                f"(got {self.market.wind_reference_cf})."
             )
 
         rho = self.market.production_cannibalisation_correlation

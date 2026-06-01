@@ -120,13 +120,16 @@ Any supply structure can be combined with any pricing structure (12 combinations
 
 ### Assumptions as Parameters
 
-Every forward-looking input is an explicit, named, configurable assumption — not a hardcoded number. The synthetic price model is built as five additive layers:
+Every forward-looking input is an explicit, named, configurable assumption — not a hardcoded number. The synthetic price model is built as six additive sublayers (the old single "intra-day" layer is now split into a deterministic demand shape and a stochastic wind-supply term so demand and renewable supply are no longer conflated):
 
-1. **Long-term level and drift** — baseline wholesale price and its annual trajectory
-2. **Seasonal shape** — winter premium, summer discount
-3. **Intra-day shape** — morning and evening peaks, midday solar dip, weekday/weekend distinction
-4. **Cannibalisation** — price suppression correlated with system-wide solar output, increasing over time
-5. **Autocorrelated noise** — AR(1) process capturing the persistence of price drivers (weather, fuel costs, outages)
+1. **Long-term level and drift** — baseline wholesale price and its annual trajectory.
+2. **Seasonal shape** — winter premium, summer discount.
+3. **Layer 3a — Demand intra-day shape (deterministic)** — bimodal weekday profile (morning peak ~08:00, evening peak ~18:00) plus a flatter weekend profile, with a mild winter uplift for heating demand. The midday plateau lies on the envelope between the morning and afternoon shoulders — **no embedded solar dip**. All midday price suppression now comes from layers 3b and 4.
+4. **Layer 3b — Wind supply suppression (stochastic)** — a Dutch system-wide wind capacity factor follows an AR(1) process in logit-space (φ ≈ 0.95, monthly means reflecting NL climatology, plus a small overnight-high / mid-afternoon-low diurnal adder). The price contribution is `−β(year) × (wind_cf(t) − reference_cf)`, where β grows linearly 2027→2036 to reflect offshore-wind buildout. Above-mean wind suppresses prices, below-mean lifts them. Calibrated as a free knob to hit the capture-rate envelope.
+5. **Layer 4 — Solar cannibalisation** — growing midday discount, modulated by the asset's own cloud factor via ρ (see "Production–cannibalisation correlation" below). α also grows linearly 2027→2036.
+6. **Autocorrelated noise** — AR(1) process capturing the persistence of price drivers (weather, fuel costs, outages).
+
+**Supply decomposition.** Layers 3b and 4 together describe Dutch renewable supply (wind + solar); layer 3a isolates demand. Wind and the asset cloud factor are drawn from independent AR(1) realisations in v1. This split fixes a previous error in which the intra-day shape baked a solar-shaped midday dip into a layer that was meant to capture demand only — that dip didn't move with realised weather and double-counted layer 4.
 
 The model is a scenario tool: swap the assumptions, re-run, and observe how the pricing range moves. The output is never a single NPV — it is always a distribution conditional on stated assumptions, with sensitivity analysis showing which assumptions matter most.
 
@@ -178,6 +181,11 @@ Where:
 - `ρ = 0.65` is the default, anchored on the empirical regional sky
   correlation across the NL grid (typically 0.6–0.75 between Utrecht and
   the rest of the country).
+- **Scope.** ρ modulates only layer 4 (solar cannibalisation). The wind
+  supply layer (3b) draws an **independent** AR(1) realisation in v1 —
+  wind weather and cloud weather are not coupled. If empirical Dutch
+  wind/sun joint statistics later justify it, a `wind_cloud_correlation`
+  knob can be added here without changing the layer-4 contract.
 
 The parameter is exposed through the FastAPI surface
 (`MarketPriceConfigSchema.production_cannibalisation_correlation`) so the
@@ -211,7 +219,7 @@ ppa-valuation-engine/
 │       ├── data/                  #   synthetic data generators
 │       │   ├── solar_production.py
 │       │   ├── consumer_load.py
-│       │   └── market_prices.py   #   5-layer price model + correlation hook
+│       │   └── market_prices.py   #   6-sublayer price model (3a demand / 3b wind / 4 solar + ρ)
 │       ├── structures/            #   pay-as-produced / pay-as-nominated / baseload
 │       ├── pricing/               #   fixed / indexed / floating
 │       ├── valuation/             #   NPV, capture price, solver
