@@ -32,8 +32,13 @@ Layer 3b — Wind supply suppression (stochastic, per Monte Carlo path)
     mean wind suppresses prices, below-mean lifts them.
 
 Layer 4 — Solar cannibalisation
-    cannibalisation(t) = −α(year) × solar_proxy(t) × modulation(t)
-    solar_proxy peaks at noon in mid-summer (all NL panels generate together).
+    cannibalisation(t) = −α(year) × system_solar_proxy(t) × modulation(t)
+    system_solar_proxy(t) is the **pvlib clear-sky POA** computed at a Dutch
+    system-reference location (Noord-Brabant centroid, distinct from the
+    asset), normalised so its peak over the horizon equals 1.0.  This replaces
+    the legacy synthetic sin(hour)×sin(doy) product so the cannibalisation dip
+    is in real-time-of-day alignment with the asset's actual production peak
+    (both share pvlib's solar geometry).
     α grows linearly from 2027→2036 reflecting continued solar build-out.
     modulation(t) ties the dip to the realised asset cloud factor via
     ρ = market.production_cannibalisation_correlation.  Critical for
@@ -60,6 +65,7 @@ import pandas as pd
 from scipy.special import logit
 
 from ppa_engine.config import PPAConfig
+from ppa_engine.data.solar_production import _clearsky_poa_at
 from ppa_engine.utils.ar1 import ar1_logit_process, ar1_process
 
 
@@ -189,21 +195,52 @@ def _layer3b_wind_supply(
     return -beta * deviation
 
 
+def compute_system_solar_proxy(
+    times: pd.DatetimeIndex,
+    config: PPAConfig,
+) -> np.ndarray:
+    """
+    NL system-wide solar shape proxy ∈ [0, 1] for layer 4 cannibalisation.
+
+    Computed as the pvlib clear-sky plane-of-array irradiance at a Dutch
+    system-reference location (default Noord-Brabant centroid), normalised so
+    the peak over ``times`` equals 1.0. Captures real solar geometry —
+    asymmetric morning/afternoon ramp, true seasonal envelope, correct local
+    solar noon — so the layer-4 dip aligns with the asset production peak.
+
+    The system reference is intentionally distinct from the asset location;
+    it represents the centroid of NL installed PV capacity, not the asset's
+    own panels.
+    """
+    mc = config.market
+    poa = _clearsky_poa_at(
+        times,
+        lat=mc.system_solar_lat,
+        lon=mc.system_solar_lon,
+        tz=mc.system_solar_tz,
+        altitude=mc.system_solar_altitude,
+        tilt_deg=mc.system_solar_tilt_deg,
+        azimuth_deg=mc.system_solar_azimuth_deg,
+    )
+    peak = float(np.max(poa)) if poa.size else 0.0
+    if peak <= 0.0:
+        return np.zeros_like(poa)
+    return poa / peak
+
+
 def _layer4_cannibalisation(
     times: pd.DatetimeIndex,
     config: PPAConfig,
     cloud_factor: np.ndarray | None = None,
+    system_solar_proxy: np.ndarray | None = None,
 ) -> np.ndarray:
     """
     Solar cannibalisation term [EUR/MWh].
 
-    system_solar_proxy(t) ∈ [0, 1] peaks at noon in mid-summer:
-        proxy(t) = max(0, sin(π × (hour − 6) / 12))
-                 × max(0, sin(π × (doy − 80) / 185))
+        layer4(t) = −α(year) × system_solar_proxy(t) × modulation(t)
 
-    The first factor is zero outside 06:00–18:00; the second is zero outside
-    roughly March–September.  Their product peaks at solar noon in late June.
-
+    ``system_solar_proxy`` is the pvlib-derived NL-wide shape ∈ [0, 1] with
+    peak = 1.0 at solar noon in late June at the system reference location.
     α(year) interpolates linearly from alpha_2027 to alpha_2036.
 
     Parameters
@@ -219,25 +256,24 @@ def _layer4_cannibalisation(
 
         modulation is clipped to [0, 2.5] so a single extreme realisation
         cannot blow up the price. When ``cloud_factor`` is None or ρ == 0
-        the function returns the legacy purely-diurnal cannibalisation.
+        the function returns the unmodulated pvlib proxy.
+    system_solar_proxy :
+        Pre-computed system-wide solar shape ∈ [0, 1]. Caller-managed cache —
+        Monte Carlo and valuation orchestrators compute it once and pass it
+        in. When None, a fresh pvlib call is made via
+        :func:`compute_system_solar_proxy`.
     """
     mc = config.market
     start_year = pd.Timestamp(config.deal.start_date).year
     end_year = pd.Timestamp(config.deal.end_date).year
-    tenor = end_year - start_year  # = 9
+    tenor = max(end_year - start_year, 1)
 
-    hours = np.array([t.hour for t in times], dtype=float)
-    doy = np.array([t.dayofyear for t in times], dtype=float)
+    if system_solar_proxy is None:
+        system_solar_proxy = compute_system_solar_proxy(times, config)
+    proxy = np.asarray(system_solar_proxy, dtype=float)
+
     months = np.array([t.month - 1 for t in times], dtype=int)
     years = np.array([t.year - start_year for t in times], dtype=float)
-
-    # Diurnal solar proxy (zero at night)
-    hour_proxy = np.maximum(0.0, np.sin(np.pi * (hours - 6.0) / 12.0))
-
-    # Seasonal solar proxy (zero in winter)
-    season_proxy = np.maximum(0.0, np.sin(np.pi * (doy - 80.0) / 185.0))
-
-    system_solar_proxy = hour_proxy * season_proxy
 
     rho = float(mc.production_cannibalisation_correlation)
     if cloud_factor is not None and rho > 0.0:
@@ -245,14 +281,13 @@ def _layer4_cannibalisation(
         expected_cloud = monthly_means[months]
         relative_clearness = np.asarray(cloud_factor, dtype=float) / expected_cloud
         modulation = np.clip((1.0 - rho) + rho * relative_clearness, 0.0, 2.5)
-        system_solar_proxy = system_solar_proxy * modulation
+        proxy = proxy * modulation
 
-    # Growing cannibalisation coefficient
     alpha = mc.cannibalisation_alpha_2027 + (
         mc.cannibalisation_alpha_2036 - mc.cannibalisation_alpha_2027
     ) * years / tenor
 
-    return -alpha * system_solar_proxy
+    return -alpha * proxy
 
 
 def _layer5_ar1_noise(times: pd.DatetimeIndex, config: PPAConfig) -> np.ndarray:
@@ -312,11 +347,20 @@ def generate_market_prices(config: PPAConfig | None = None) -> pd.Series:
     # Layer 3b draws an independent AR(1) wind factor using config.market.wind_seed.
     wind_cf = compute_wind_factor(times, config)
 
+    # Layer 4 system proxy: pvlib clear-sky POA at the NL system reference
+    # location, computed once for the horizon and reused (expensive pvlib call).
+    system_solar_proxy = compute_system_solar_proxy(times, config)
+
     layer1 = _layer1_level(times, config)
     layer2 = _layer2_seasonal(times, config)
     layer3a = _layer3a_demand(times, config)
     layer3b = _layer3b_wind_supply(times, config, wind_cf=wind_cf)
-    layer4 = _layer4_cannibalisation(times, config, cloud_factor=cloud)
+    layer4 = _layer4_cannibalisation(
+        times,
+        config,
+        cloud_factor=cloud,
+        system_solar_proxy=system_solar_proxy,
+    )
     layer5 = _layer5_ar1_noise(times, config)
 
     prices = layer1 + layer2 + layer3a + layer3b + layer4 + layer5

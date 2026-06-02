@@ -34,6 +34,7 @@ from ppa_engine.data.market_prices import (
     _layer3a_demand,
     _layer3b_wind_supply,
     _layer4_cannibalisation,
+    compute_system_solar_proxy,
     compute_wind_factor,
 )
 from ppa_engine.data.solar_production import _clearsky_poa, compute_cloud_factor
@@ -132,6 +133,7 @@ def _price_series(
     seed: int,
     cloud_factor: np.ndarray | None = None,
     wind_factor: np.ndarray | None = None,
+    system_solar_proxy: np.ndarray | None = None,
 ) -> pd.Series:
     """
     Generate one price path for a given noise seed.
@@ -142,10 +144,18 @@ def _price_series(
     layer 4 is recomputed with the supplied ``cloud_factor`` so the midday
     dip co-moves with production when
     ``market.production_cannibalisation_correlation`` > 0.
+    ``system_solar_proxy`` is the cached pvlib clear-sky shape that drives
+    layer 4's underlying NL-wide solar pattern (deterministic — same across
+    all paths).
     """
     mc = config.market
     layer3b = _layer3b_wind_supply(times, config, wind_cf=wind_factor)
-    layer4 = _layer4_cannibalisation(times, config, cloud_factor=cloud_factor)
+    layer4 = _layer4_cannibalisation(
+        times,
+        config,
+        cloud_factor=cloud_factor,
+        system_solar_proxy=system_solar_proxy,
+    )
     noise = ar1_process(
         n=len(times),
         phi=mc.ar1_phi,
@@ -170,6 +180,7 @@ def _run_ensemble(
     poa_clearsky: np.ndarray,
     degradation: np.ndarray,
     deterministic_price_1_2_3a: np.ndarray,
+    system_solar_proxy: np.ndarray,
     load: pd.Series,
     config: PPAConfig,
     n_paths: int,
@@ -211,6 +222,7 @@ def _run_ensemble(
                 config.market.seed,
                 cloud_factor=cloud,
                 wind_factor=central_wind,
+                system_solar_proxy=system_solar_proxy,
             )
         elif mode == "price":
             solar = central_solar
@@ -222,6 +234,7 @@ def _run_ensemble(
                 _PRICE_PRICE_BASE + i * _PATH_PRIME,
                 cloud_factor=central_cloud,
                 wind_factor=wind,
+                system_solar_proxy=system_solar_proxy,
             )
         else:  # joint
             cloud = _cloud_series(
@@ -238,6 +251,7 @@ def _run_ensemble(
                 _JOINT_PRICE_BASE + i * _PATH_PRIME,
                 cloud_factor=cloud,
                 wind_factor=wind,
+                system_solar_proxy=system_solar_proxy,
             )
 
         combo = value_all_combinations(solar, load, prices, config, base_strike=base_strike)
@@ -335,6 +349,10 @@ def run_monte_carlo(
 
     poa_clearsky = _clearsky_poa(times, config)
 
+    # Layer 4 system-wide solar shape (pvlib at NL system reference) is
+    # deterministic across paths — compute once, share across all ensembles.
+    system_solar_proxy = compute_system_solar_proxy(times, config)
+
     start_year = pd.Timestamp(config.deal.start_date).year
     year_offset = np.array([t.year - start_year for t in times])
     degradation = 1.0 - config.solar.degradation_rate * year_offset
@@ -363,6 +381,7 @@ def run_monte_carlo(
         times, deterministic_price_1_2_3a, config, config.market.seed,
         cloud_factor=central_cloud,
         wind_factor=central_wind,
+        system_solar_proxy=system_solar_proxy,
     )
     central_df = value_all_combinations(
         central_solar, load, central_prices, config, base_strike=base_strike
@@ -373,8 +392,8 @@ def run_monte_carlo(
     for mode in modes:
         df = _run_ensemble(
             mode, times, poa_clearsky, degradation, deterministic_price_1_2_3a,
-            load, config, n_paths, base_strike, central_solar, central_prices,
-            central_cloud, central_wind,
+            system_solar_proxy, load, config, n_paths, base_strike,
+            central_solar, central_prices, central_cloud, central_wind,
         )
         frames.append(df)
 

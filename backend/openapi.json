@@ -599,8 +599,8 @@
                 "base_price": 83.0,
                 "beta_wind_2027": 35.0,
                 "beta_wind_2036": 75.0,
-                "cannibalisation_alpha_2027": 70.0,
-                "cannibalisation_alpha_2036": 115.0,
+                "cannibalisation_alpha_2027": 40.0,
+                "cannibalisation_alpha_2036": 60.0,
                 "demand_peak_day": 15,
                 "demand_weekday_shape": [
                   -10.0,
@@ -674,6 +674,12 @@
                 "seasonal_amplitude": 15.0,
                 "seasonal_peak_day": 15,
                 "seed": 42,
+                "system_solar_altitude": 10.0,
+                "system_solar_azimuth_deg": 180.0,
+                "system_solar_lat": 51.6,
+                "system_solar_lon": 5.3,
+                "system_solar_tilt_deg": 30.0,
+                "system_solar_tz": "Europe/Amsterdam",
                 "wind_cf_logit_scale": 0.6,
                 "wind_cf_phi": 0.95,
                 "wind_diurnal_logit_adder": [
@@ -1099,12 +1105,12 @@
           "cannibalisation_alpha_2027": {
             "type": "number",
             "title": "Cannibalisation Alpha 2027",
-            "default": 70.0
+            "default": 40.0
           },
           "cannibalisation_alpha_2036": {
             "type": "number",
             "title": "Cannibalisation Alpha 2036",
-            "default": 115.0
+            "default": 60.0
           },
           "production_cannibalisation_correlation": {
             "type": "number",
@@ -1112,6 +1118,44 @@
             "minimum": 0.0,
             "title": "Production Cannibalisation Correlation",
             "default": 0.65
+          },
+          "system_solar_lat": {
+            "type": "number",
+            "maximum": 54.0,
+            "minimum": 50.0,
+            "title": "System Solar Lat",
+            "default": 51.6
+          },
+          "system_solar_lon": {
+            "type": "number",
+            "maximum": 8.0,
+            "minimum": 3.0,
+            "title": "System Solar Lon",
+            "default": 5.3
+          },
+          "system_solar_tz": {
+            "type": "string",
+            "title": "System Solar Tz",
+            "default": "Europe/Amsterdam"
+          },
+          "system_solar_altitude": {
+            "type": "number",
+            "title": "System Solar Altitude",
+            "default": 10.0
+          },
+          "system_solar_tilt_deg": {
+            "type": "number",
+            "maximum": 90.0,
+            "minimum": 0.0,
+            "title": "System Solar Tilt Deg",
+            "default": 30.0
+          },
+          "system_solar_azimuth_deg": {
+            "type": "number",
+            "maximum": 360.0,
+            "minimum": 0.0,
+            "title": "System Solar Azimuth Deg",
+            "default": 180.0
           },
           "ar1_phi": {
             "type": "number",
@@ -1279,8 +1323,8 @@
                 "base_price": 83.0,
                 "beta_wind_2027": 35.0,
                 "beta_wind_2036": 75.0,
-                "cannibalisation_alpha_2027": 70.0,
-                "cannibalisation_alpha_2036": 115.0,
+                "cannibalisation_alpha_2027": 40.0,
+                "cannibalisation_alpha_2036": 60.0,
                 "demand_peak_day": 15,
                 "demand_weekday_shape": [
                   -10.0,
@@ -1354,6 +1398,12 @@
                 "seasonal_amplitude": 15.0,
                 "seasonal_peak_day": 15,
                 "seed": 42,
+                "system_solar_altitude": 10.0,
+                "system_solar_azimuth_deg": 180.0,
+                "system_solar_lat": 51.6,
+                "system_solar_lon": 5.3,
+                "system_solar_tilt_deg": 30.0,
+                "system_solar_tz": "Europe/Amsterdam",
                 "wind_cf_logit_scale": 0.6,
                 "wind_cf_phi": 0.95,
                 "wind_diurnal_logit_adder": [
@@ -1757,8 +1807,8 @@
                 "base_price": 83.0,
                 "beta_wind_2027": 35.0,
                 "beta_wind_2036": 75.0,
-                "cannibalisation_alpha_2027": 70.0,
-                "cannibalisation_alpha_2036": 115.0,
+                "cannibalisation_alpha_2027": 40.0,
+                "cannibalisation_alpha_2036": 60.0,
                 "demand_peak_day": 15,
                 "demand_weekday_shape": [
                   -10.0,
@@ -1832,6 +1882,12 @@
                 "seasonal_amplitude": 15.0,
                 "seasonal_peak_day": 15,
                 "seed": 42,
+                "system_solar_altitude": 10.0,
+                "system_solar_azimuth_deg": 180.0,
+                "system_solar_lat": 51.6,
+                "system_solar_lon": 5.3,
+                "system_solar_tilt_deg": 30.0,
+                "system_solar_tz": "Europe/Amsterdam",
                 "wind_cf_logit_scale": 0.6,
                 "wind_cf_phi": 0.95,
                 "wind_diurnal_logit_adder": [
@@ -2197,8 +2253,8 @@
                 "base_price": 83.0,
                 "beta_wind_2027": 35.0,
                 "beta_wind_2036": 75.0,
-                "cannibalisation_alpha_2027": 70.0,
-                "cannibalisation_alpha_2036": 115.0,
+                "cannibalisation_alpha_2027": 40.0,
+                "cannibalisation_alpha_2036": 60.0,
                 "demand_peak_day": 15,
                 "demand_weekday_shape": [
                   -10.0,
@@ -2272,6 +2328,12 @@
                 "seasonal_amplitude": 15.0,
                 "seasonal_peak_day": 15,
                 "seed": 42,
+                "system_solar_altitude": 10.0,
+                "system_solar_azimuth_deg": 180.0,
+                "system_solar_lat": 51.6,
+                "system_solar_lon": 5.3,
+                "system_solar_tilt_deg": 30.0,
+                "system_solar_tz": "Europe/Amsterdam",
                 "wind_cf_logit_scale": 0.6,
                 "wind_cf_phi": 0.95,
                 "wind_diurnal_logit_adder": [
@@ -2512,8 +2574,8 @@
                 "base_price": 83.0,
                 "beta_wind_2027": 35.0,
                 "beta_wind_2036": 75.0,
-                "cannibalisation_alpha_2027": 70.0,
-                "cannibalisation_alpha_2036": 115.0,
+                "cannibalisation_alpha_2027": 40.0,
+                "cannibalisation_alpha_2036": 60.0,
                 "demand_peak_day": 15,
                 "demand_weekday_shape": [
                   -10.0,
@@ -2587,6 +2649,12 @@
                 "seasonal_amplitude": 15.0,
                 "seasonal_peak_day": 15,
                 "seed": 42,
+                "system_solar_altitude": 10.0,
+                "system_solar_azimuth_deg": 180.0,
+                "system_solar_lat": 51.6,
+                "system_solar_lon": 5.3,
+                "system_solar_tilt_deg": 30.0,
+                "system_solar_tz": "Europe/Amsterdam",
                 "wind_cf_logit_scale": 0.6,
                 "wind_cf_phi": 0.95,
                 "wind_diurnal_logit_adder": [

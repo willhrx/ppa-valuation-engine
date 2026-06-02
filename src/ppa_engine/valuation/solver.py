@@ -482,7 +482,7 @@ def solve_fair_strike_cross_structure(
     from ppa_engine.data.market_prices import (
         _build_timestamps, _layer1_level, _layer2_seasonal,
         _layer3a_demand, _layer3b_wind_supply, _layer4_cannibalisation,
-        compute_wind_factor,
+        compute_system_solar_proxy, compute_wind_factor,
     )
     from ppa_engine.data.solar_production import _clearsky_poa
 
@@ -493,6 +493,9 @@ def solve_fair_strike_cross_structure(
     # Step 1: pre-compute deterministic inputs (pvlib done once)
     times = _build_timestamps(config)
     poa_clearsky = _clearsky_poa(times, config)
+    # System-wide solar shape for layer 4 (pvlib NL reference) — deterministic,
+    # computed once and reused across all paths.
+    system_solar_proxy = compute_system_solar_proxy(times, config)
     start_year = pd.Timestamp(config.deal.start_date).year
     year_offset = np.array([t.year - start_year for t in times])
     degradation = 1.0 - config.solar.degradation_rate * year_offset
@@ -504,7 +507,9 @@ def solve_fair_strike_cross_structure(
         + _layer2_seasonal(times, config)
         + _layer3a_demand(times, config)
         + _layer3b_wind_supply(times, config, wind_cf=central_wind)
-        + _layer4_cannibalisation(times, config)
+        + _layer4_cannibalisation(
+            times, config, system_solar_proxy=system_solar_proxy,
+        )
     )
 
     # Step 2: generate shared n_paths (solar, price) pairs.

@@ -42,32 +42,37 @@ def _build_timestamps(config: PPAConfig) -> pd.DatetimeIndex:
     )
 
 
-def _clearsky_poa(times: pd.DatetimeIndex, config: PPAConfig) -> np.ndarray:
+def _clearsky_poa_at(
+    times: pd.DatetimeIndex,
+    lat: float,
+    lon: float,
+    tz: str,
+    altitude: float,
+    tilt_deg: float,
+    azimuth_deg: float,
+) -> np.ndarray:
     """
-    Compute clear-sky plane-of-array (POA) irradiance [W/m²].
+    Compute clear-sky plane-of-array (POA) irradiance [W/m²] at an arbitrary
+    location and panel orientation.
 
-    Uses pvlib Ineichen clear-sky model and isotropic sky diffuse model.
+    Uses pvlib Ineichen clear-sky model and isotropic sky diffuse model. This
+    is the parameter-driven primitive used both for the asset's production
+    series and for the NL system-reference solar proxy that drives layer 4
+    cannibalisation in market_prices.py.
     """
-    lc = config.location
-    sc = config.solar
-
     location = pvlib.location.Location(
-        latitude=lc.lat,
-        longitude=lc.lon,
-        tz=lc.tz,
-        altitude=lc.altitude,
+        latitude=lat,
+        longitude=lon,
+        tz=tz,
+        altitude=altitude,
     )
 
-    # Clear-sky GHI, DNI, DHI via Ineichen
     clearsky = location.get_clearsky(times)
-
-    # Solar position
     solar_pos = location.get_solarposition(times)
 
-    # Decompose onto tilted surface
     poa = pvlib.irradiance.get_total_irradiance(
-        surface_tilt=sc.tilt_deg,
-        surface_azimuth=sc.azimuth_deg,
+        surface_tilt=tilt_deg,
+        surface_azimuth=azimuth_deg,
         solar_zenith=solar_pos["apparent_zenith"],
         solar_azimuth=solar_pos["azimuth"],
         dni=clearsky["dni"],
@@ -77,6 +82,21 @@ def _clearsky_poa(times: pd.DatetimeIndex, config: PPAConfig) -> np.ndarray:
     )
 
     return poa["poa_global"].fillna(0.0).values
+
+
+def _clearsky_poa(times: pd.DatetimeIndex, config: PPAConfig) -> np.ndarray:
+    """Thin wrapper computing the asset's clear-sky POA from config."""
+    lc = config.location
+    sc = config.solar
+    return _clearsky_poa_at(
+        times,
+        lat=lc.lat,
+        lon=lc.lon,
+        tz=lc.tz,
+        altitude=lc.altitude,
+        tilt_deg=sc.tilt_deg,
+        azimuth_deg=sc.azimuth_deg,
+    )
 
 
 def compute_cloud_factor(

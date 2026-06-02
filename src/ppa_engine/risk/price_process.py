@@ -27,6 +27,7 @@ from ppa_engine.data.market_prices import (
     _layer3a_demand,
     _layer3b_wind_supply,
     _layer4_cannibalisation,
+    compute_system_solar_proxy,
     compute_wind_factor,
 )
 from ppa_engine.data.solar_production import compute_cloud_factor
@@ -59,6 +60,7 @@ def build_deterministic_price(
     config: PPAConfig,
     wind_cf: np.ndarray | None = None,
     cloud_factor: np.ndarray | None = None,
+    system_solar_proxy: np.ndarray | None = None,
 ) -> np.ndarray:
     """
     Compute the sum of price layers 1, 2, 3a, 3b and 4 — the full price
@@ -68,6 +70,8 @@ def build_deterministic_price(
     only source of variation.  When ``wind_cf`` / ``cloud_factor`` are not
     supplied, central deterministic realisations are drawn from the
     configured seeds so the helper still returns a single fixed array.
+    ``system_solar_proxy`` is the pvlib-derived NL solar shape; when None it
+    is recomputed here (expensive — pass in if calling repeatedly).
 
     Compute once and pass into ``simulate_price_paths`` to avoid redundant
     work.
@@ -79,13 +83,20 @@ def build_deterministic_price(
         and config.market.production_cannibalisation_correlation > 0.0
     ):
         cloud_factor = compute_cloud_factor(times, config)
+    if system_solar_proxy is None:
+        system_solar_proxy = compute_system_solar_proxy(times, config)
 
     return (
         _layer1_level(times, config)
         + _layer2_seasonal(times, config)
         + _layer3a_demand(times, config)
         + _layer3b_wind_supply(times, config, wind_cf=wind_cf)
-        + _layer4_cannibalisation(times, config, cloud_factor=cloud_factor)
+        + _layer4_cannibalisation(
+            times,
+            config,
+            cloud_factor=cloud_factor,
+            system_solar_proxy=system_solar_proxy,
+        )
     )
 
 

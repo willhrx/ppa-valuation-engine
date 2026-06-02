@@ -126,10 +126,12 @@ Every forward-looking input is an explicit, named, configurable assumption — n
 2. **Seasonal shape** — winter premium, summer discount.
 3. **Layer 3a — Demand intra-day shape (deterministic)** — bimodal weekday profile (morning peak ~08:00, evening peak ~18:00) plus a flatter weekend profile, with a mild winter uplift for heating demand. The midday plateau lies on the envelope between the morning and afternoon shoulders — **no embedded solar dip**. All midday price suppression now comes from layers 3b and 4.
 4. **Layer 3b — Wind supply suppression (stochastic)** — a Dutch system-wide wind capacity factor follows an AR(1) process in logit-space (φ ≈ 0.95, monthly means reflecting NL climatology, plus a small overnight-high / mid-afternoon-low diurnal adder). The price contribution is `−β(year) × (wind_cf(t) − reference_cf)`, where β grows linearly 2027→2036 to reflect offshore-wind buildout. Above-mean wind suppresses prices, below-mean lifts them. Calibrated as a free knob to hit the capture-rate envelope.
-5. **Layer 4 — Solar cannibalisation** — growing midday discount, modulated by the asset's own cloud factor via ρ (see "Production–cannibalisation correlation" below). α also grows linearly 2027→2036.
+5. **Layer 4 — Solar cannibalisation** — growing midday discount, whose intraday shape is now a **pvlib clear-sky POA proxy** computed at a Dutch system-reference location (Noord-Brabant centroid, ~51.6°N, 5.3°E — the capacity centroid of NL installed PV, deliberately distinct from the asset's own location). The proxy is normalised so its horizon peak = 1.0 and replaces the legacy synthetic `sin(hour)×sin(doy)` product. The dip is then modulated by the asset's own cloud factor via ρ (see "Production–cannibalisation correlation" below); α grows linearly 2027→2036.
 6. **Autocorrelated noise** — AR(1) process capturing the persistence of price drivers (weather, fuel costs, outages).
 
 **Supply decomposition.** Layers 3b and 4 together describe Dutch renewable supply (wind + solar); layer 3a isolates demand. Wind and the asset cloud factor are drawn from independent AR(1) realisations in v1. This split fixes a previous error in which the intra-day shape baked a solar-shaped midday dip into a layer that was meant to capture demand only — that dip didn't move with realised weather and double-counted layer 4.
+
+**Production–cannibalisation timing.** Since both the asset's production and the layer-4 system proxy now come from `pvlib`'s real solar geometry, the cannibalisation dip aligns with the asset's production peak hour-by-hour and tracks the true seasonal envelope (asymmetric morning/afternoon ramps, the slight peak-day shift introduced by panel tilt) — not the smooth artefactual peak of a synthetic sinusoid. The system proxy itself is **deterministic** (clear-sky only); the modulation through ρ × asset cloud factor is what introduces day-to-day stochasticity in cannibalisation depth. NL is small enough that the asset cloud series correlates strongly with NL-wide cloud cover, so in v1 we do not introduce a separate stochastic system cloud process. The system reference location, tilt, and azimuth are exposed as `MarketPriceConfig.system_solar_*` fields.
 
 The model is a scenario tool: swap the assumptions, re-run, and observe how the pricing range moves. The output is never a single NPV — it is always a distribution conditional on stated assumptions, with sensitivity analysis showing which assumptions matter most.
 
@@ -219,7 +221,7 @@ ppa-valuation-engine/
 │       ├── data/                  #   synthetic data generators
 │       │   ├── solar_production.py
 │       │   ├── consumer_load.py
-│       │   └── market_prices.py   #   6-sublayer price model (3a demand / 3b wind / 4 solar + ρ)
+│       │   └── market_prices.py   #   6-sublayer price model (3a demand / 3b wind / 4 pvlib solar + ρ)
 │       ├── structures/            #   pay-as-produced / pay-as-nominated / baseload
 │       ├── pricing/               #   fixed / indexed / floating
 │       ├── valuation/             #   NPV, capture price, solver

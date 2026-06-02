@@ -165,12 +165,28 @@ class MarketPriceConfig:
     wind_seed: int = 43                     # separate from other seeds
 
     # Layer 4 — cannibalisation (solar buildout suppressing midday prices)
-    # Calibrated to achieve capture rate ~0.85 in 2027 declining to ~0.65 by 2036.
-    # Re-tuned upward (was 55→90) after layer 3 lost its embedded midday dip
-    # in the demand/wind-supply split — layer 4 now carries all solar-driven
-    # cannibalisation pressure.
-    cannibalisation_alpha_2027: float = 70.0   # EUR/MWh at full solar proxy
-    cannibalisation_alpha_2036: float = 115.0  # grows linearly to this by 2036
+    # Calibrated to achieve capture rate ~0.84 in 2027 declining to ~0.63 by 2036.
+    # Re-tuned downward (was 70→115) after layer 4's proxy switched from the
+    # legacy sin(hour)×sin(doy) synthetic to a pvlib clear-sky shape: with both
+    # the asset and the system proxy sharing real solar geometry, the dip and
+    # the production peak align hour-by-hour, so each unit of α now lands with
+    # much more force.
+    cannibalisation_alpha_2027: float = 40.0   # EUR/MWh at full solar proxy
+    cannibalisation_alpha_2036: float = 60.0   # grows linearly to this by 2036
+
+    # Layer 4 system-reference solar location (NL system-wide solar proxy).
+    # The proxy shape is computed via pvlib clear-sky POA at this location,
+    # normalised to peak = 1.0, replacing the legacy synthetic sin(hour)×sin(doy)
+    # product. Defaults sit in the Noord-Brabant solar cluster (Den Bosch /
+    # Eindhoven area) — the largest installed-capacity centroid in the NL grid.
+    # Kept distinct from the asset location so the system proxy represents
+    # nationwide solar, not the asset's own panels.
+    system_solar_lat: float = 51.6
+    system_solar_lon: float = 5.3
+    system_solar_tz: str = "Europe/Amsterdam"
+    system_solar_altitude: float = 10.0
+    system_solar_tilt_deg: float = 30.0
+    system_solar_azimuth_deg: float = 180.0
 
     # Production–cannibalisation correlation (ρ ∈ [0, 1])
     # Dutch solar generation is geographically correlated: when our asset has
@@ -354,6 +370,27 @@ class PPAConfig:
             raise ValueError(
                 f"market.production_cannibalisation_correlation must be in "
                 f"[0, 1] (got {rho})."
+            )
+
+        if not (50.0 <= self.market.system_solar_lat <= 54.0):
+            raise ValueError(
+                f"market.system_solar_lat must be in [50, 54] "
+                f"(got {self.market.system_solar_lat})."
+            )
+        if not (3.0 <= self.market.system_solar_lon <= 8.0):
+            raise ValueError(
+                f"market.system_solar_lon must be in [3, 8] "
+                f"(got {self.market.system_solar_lon})."
+            )
+        if not (0.0 <= self.market.system_solar_tilt_deg <= 90.0):
+            raise ValueError(
+                f"market.system_solar_tilt_deg must be in [0, 90] "
+                f"(got {self.market.system_solar_tilt_deg})."
+            )
+        if not (0.0 <= self.market.system_solar_azimuth_deg <= 360.0):
+            raise ValueError(
+                f"market.system_solar_azimuth_deg must be in [0, 360] "
+                f"(got {self.market.system_solar_azimuth_deg})."
             )
 
 

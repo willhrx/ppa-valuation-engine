@@ -80,8 +80,8 @@ class MarketPriceConfigSchema(BaseModel):
     beta_wind_2036: float = 75.0
     wind_seed: int = 43
 
-    cannibalisation_alpha_2027: float = 70.0
-    cannibalisation_alpha_2036: float = 115.0
+    cannibalisation_alpha_2027: float = 40.0
+    cannibalisation_alpha_2036: float = 60.0
     # ρ ∈ [0, 1]. Couples layer-4 (cannibalisation) depth to the realised
     # asset cloud factor: high-irradiance days get a deeper midday dip,
     # overcast days a shallower one. ρ = 0 reproduces the legacy purely
@@ -89,6 +89,17 @@ class MarketPriceConfigSchema(BaseModel):
     production_cannibalisation_correlation: float = Field(
         default=0.65, ge=0.0, le=1.0
     )
+
+    # Layer 4 system-reference location: pvlib clear-sky POA computed here
+    # provides the NL system-wide solar proxy shape (normalised peak = 1.0).
+    # Defaults sit in the Noord-Brabant solar cluster — different from the
+    # asset (Utrecht) so the proxy represents nationwide solar.
+    system_solar_lat: float = Field(default=51.6, ge=50.0, le=54.0)
+    system_solar_lon: float = Field(default=5.3, ge=3.0, le=8.0)
+    system_solar_tz: str = "Europe/Amsterdam"
+    system_solar_altitude: float = 10.0
+    system_solar_tilt_deg: float = Field(default=30.0, ge=0.0, le=90.0)
+    system_solar_azimuth_deg: float = Field(default=180.0, ge=0.0, le=360.0)
     ar1_phi: float = 0.70
     ar1_sigma: float = 8.0
     seed: int = 42
