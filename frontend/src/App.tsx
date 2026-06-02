@@ -5,6 +5,7 @@ import { KpiStrip } from '@/components/kpi-strip'
 import { ProfilesCharts } from '@/components/profiles-charts'
 import { ValuationMatrixTable } from '@/components/valuation-matrix-table'
 import { PanelError, PanelLoading } from '@/components/spinner'
+import { useRiskSimulation } from '@/hooks/useRiskSimulation'
 import { api, ApiError, type PPAConfig } from '@/lib/api'
 
 const DEFAULT_BASE_STRIKE = 65.0
@@ -14,7 +15,17 @@ type DefaultsState =
   | { status: 'ready'; config: PPAConfig }
   | { status: 'error'; message: string }
 
-const NAV = ['Deal setup', 'Profiles', 'Valuation', 'Risk', 'Reports']
+interface NavItem {
+  label: string
+  anchor: string
+}
+
+const NAV: NavItem[] = [
+  { label: 'Deal setup', anchor: '#deal-setup' },
+  { label: 'Profiles', anchor: '#profiles' },
+  { label: 'Valuation', anchor: '#valuation' },
+  { label: 'Risk', anchor: '#valuation' },
+]
 
 function App() {
   const [defaults, setDefaults] = useState<DefaultsState>({ status: 'loading' })
@@ -22,6 +33,12 @@ function App() {
     config: PPAConfig
     baseStrike: number
   } | null>(null)
+  const [activeAnchor, setActiveAnchor] = useState<string>('#deal-setup')
+
+  const simulation = useRiskSimulation(
+    applied?.config ?? null,
+    applied?.baseStrike ?? DEFAULT_BASE_STRIKE,
+  )
 
   useEffect(() => {
     const controller = new AbortController()
@@ -44,15 +61,36 @@ function App() {
     return () => controller.abort()
   }, [])
 
+  useEffect(() => {
+    const targets = ['deal-setup', 'profiles', 'valuation']
+      .map((id) => document.getElementById(id))
+      .filter((el): el is HTMLElement => el !== null)
+    if (targets.length === 0) return
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((e) => e.isIntersecting)
+          .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0]
+        if (visible) setActiveAnchor(`#${visible.target.id}`)
+      },
+      { rootMargin: '-80px 0px -50% 0px', threshold: [0, 0.25, 0.5, 0.75, 1] },
+    )
+    for (const t of targets) observer.observe(t)
+    return () => observer.disconnect()
+  }, [defaults.status])
+
   const handleReset = async () => {
     const fresh = await api.configDefaults()
     setApplied({ config: fresh, baseStrike: DEFAULT_BASE_STRIKE })
     return fresh
   }
 
+  const runRisk = () => simulation.run()
+  const riskRunning = simulation.state.status === 'loading'
+
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">
-      <header className="border-b bg-card">
+      <header className="sticky top-0 z-20 border-b bg-card/95 backdrop-blur">
         <div className="mx-auto flex h-16 max-w-[1600px] items-center gap-6 px-6">
           <div className="flex items-center gap-3">
             <div
@@ -77,12 +115,13 @@ function App() {
           </div>
 
           <nav className="ml-6 flex gap-1">
-            {NAV.map((n, i) => {
-              const active = i === 2
+            {NAV.map(({ label, anchor }) => {
+              const active = anchor === activeAnchor
               return (
-                <span
-                  key={n}
-                  className="rounded-[7px] border px-3 py-1.5 text-xs"
+                <a
+                  key={label}
+                  href={anchor}
+                  className="rounded-[7px] border px-3 py-1.5 text-xs transition-colors"
                   style={{
                     color: active
                       ? 'var(--foreground)'
@@ -94,8 +133,8 @@ function App() {
                     borderColor: active ? 'var(--border)' : 'transparent',
                   }}
                 >
-                  {n}
-                </span>
+                  {label}
+                </a>
               )
             })}
           </nav>
@@ -134,7 +173,9 @@ function App() {
 
           <button
             type="button"
-            className="h-9 rounded-[9px] px-4 text-[12.5px] font-semibold tracking-[-0.005em] text-primary-foreground transition-shadow hover:shadow-lg"
+            onClick={runRisk}
+            disabled={!applied || riskRunning}
+            className="h-9 rounded-[9px] px-4 text-[12.5px] font-semibold tracking-[-0.005em] text-primary-foreground transition-shadow hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-60"
             style={{
               background:
                 'linear-gradient(180deg, var(--accent), var(--accent-deep))',
@@ -142,7 +183,7 @@ function App() {
                 'inset 0 1px 0 var(--accent-deep), 0 4px 12px color-mix(in oklch, var(--accent) 25%, transparent)',
             }}
           >
-            Run 500-path simulation →
+            {riskRunning ? 'Running…' : 'Run 500-path simulation →'}
           </button>
         </div>
       </header>
@@ -157,8 +198,11 @@ function App() {
             <KpiStrip config={applied.config} baseStrike={applied.baseStrike} />
 
             <div className="grid grid-cols-12 gap-4">
-              <aside className="col-span-12 lg:col-span-3">
-                <div className="lg:sticky lg:top-4 lg:max-h-[calc(100vh-5rem)]">
+              <aside
+                id="deal-setup"
+                className="col-span-12 scroll-mt-20 lg:col-span-3"
+              >
+                <div className="lg:sticky lg:top-20 lg:max-h-[calc(100vh-6rem)]">
                   <ConfigPanel
                     initial={defaults.config}
                     baseStrike={DEFAULT_BASE_STRIKE}
@@ -171,11 +215,16 @@ function App() {
               </aside>
 
               <section className="col-span-12 space-y-4 lg:col-span-9">
-                <ProfilesCharts config={applied.config} />
-                <ValuationMatrixTable
-                  config={applied.config}
-                  baseStrike={applied.baseStrike}
-                />
+                <div id="profiles" className="scroll-mt-20">
+                  <ProfilesCharts config={applied.config} />
+                </div>
+                <div id="valuation" className="scroll-mt-20">
+                  <ValuationMatrixTable
+                    config={applied.config}
+                    baseStrike={applied.baseStrike}
+                    simulation={simulation}
+                  />
+                </div>
               </section>
             </div>
           </div>

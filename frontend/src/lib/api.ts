@@ -87,6 +87,12 @@ export type ProfilesResponse = Schemas['ProfilesResponse']
 export type ValuationRow = Schemas['ValuationRowSchema']
 export type ValuationMatrixResponse = Schemas['ValuationMatrixResponse']
 
+export type PathDistribution = Schemas['PathDistributionSchema']
+export type VarianceDecomposition = Schemas['VarianceDecompositionSchema']
+export type ComboRiskSummary = Schemas['ComboRiskSummarySchema']
+export type RiskSummary = Schemas['RiskSummarySchema']
+export type MonteCarloResponse = Schemas['MonteCarloResponse']
+
 // /api/health returns a free-form dict in the spec; describe it locally.
 export interface HealthResponse {
   status: string
@@ -115,6 +121,17 @@ export const api = {
     apiPost<ValuationMatrixResponse>(
       '/api/valuation/matrix',
       { config, base_strike: baseStrike },
+      signal,
+    ),
+  simulate: (
+    config: PPAConfig,
+    baseStrike: number,
+    nPaths: number = 500,
+    signal?: AbortSignal,
+  ) =>
+    apiPost<MonteCarloResponse>(
+      '/api/simulate',
+      { config, base_strike: baseStrike, n_paths: nPaths },
       signal,
     ),
 }

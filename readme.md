@@ -38,11 +38,30 @@ npm run dev
 
 The app opens at `http://localhost:5173`.
 
-- **Deal Setup** — configure the solar asset, market assumptions, and offtaker load
-- **Profiles & Preview** — inspect generated hourly profiles and headline KPIs
-- **Valuation Matrix** — NPVs across 12 supply × pricing combinations
-- **Monte Carlo** — run the 1,000-path simulation and explore the risk distribution
-- **Solver** — negotiation range, tornado sensitivities, and cross-structure fair strikes
+The UI is a single dense page laid out for desk-side analysis rather than a
+multi-tab walkthrough. A sticky left panel holds the deal-setup config —
+including an interactive **MapLibre asset-location picker** that drives
+`pvlib` solar geometry — and the right column shows, top to bottom:
+
+- A KPI strip with capture rate, NPV, negotiation range, and profile risk.
+- The generation / load / price profile chart (daily over the horizon and a
+  sample-week hourly close-up).
+- The valuation matrix: NPVs across all 12 supply × pricing combinations,
+  with a **"Run risk analysis"** button that fires `/api/simulate`
+  (~45 s). Once the simulation completes, each matrix row expands inline
+  to reveal its Monte Carlo distribution — P10/P50/P90 NPV, VaR(95%),
+  Expected Shortfall, P(NPV < 0), and a variance-attribution bar splitting
+  total NPV variance into price / volume / interaction components.
+
+The top nav (`Deal setup` / `Profiles` / `Valuation` / `Risk`) is a set of
+scroll-anchor links — every section lives on the same page.
+
+#### Backend-only routes (no UI yet)
+
+`/api/solver/*` (negotiation range, tornado sensitivities, cross-structure
+fair strikes) is exposed by `backend/routers/solver.py` but is not surfaced
+in the frontend yet — drive it from `http://localhost:8000/docs` or a
+notebook for now.
 
 ### 3. Refreshing the API contract
 

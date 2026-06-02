@@ -37,7 +37,7 @@ export function ProfilesCharts({ config }: ProfilesChartsProps) {
   )
 
   return (
-    <Card className="h-full p-0">
+    <Card className="p-0">
       <div className="flex items-start justify-between gap-4 border-b px-6 pt-5 pb-4">
         <div>
           <div className="text-sm font-semibold tracking-[-0.005em]">
@@ -68,7 +68,7 @@ export function ProfilesCharts({ config }: ProfilesChartsProps) {
         )}
       </div>
 
-      <CardContent className="px-4 pt-3 pb-4">
+      <CardContent className="px-5 pt-3 pb-5">
         {state.status === 'idle' && (
           <p className="text-xs text-muted-foreground">
             Apply a configuration to load profiles.
@@ -165,7 +165,7 @@ function ChartTabs({ profiles }: { profiles: ProfilesResponse }) {
       </div>
 
       <TabsContent value="overview" className="pt-4">
-        <div className="h-[340px] w-full">
+        <div className="aspect-[16/6] w-full min-h-[300px]">
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart
               data={daily}
@@ -263,7 +263,7 @@ function ChartTabs({ profiles }: { profiles: ProfilesResponse }) {
       </TabsContent>
 
       <TabsContent value="week" className="pt-4">
-        <div className="h-[340px] w-full">
+        <div className="aspect-[16/6] w-full min-h-[300px]">
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart
               data={week}
@@ -290,7 +290,7 @@ function ChartTabs({ profiles }: { profiles: ProfilesResponse }) {
                 tickFormatter={(v: number) => fmtNumber(v, 0)}
                 stroke="var(--border)"
                 label={{
-                  value: 'MWh/h',
+                  value: 'MW',
                   angle: -90,
                   position: 'insideLeft',
                   style: { fontSize: 10, fill: 'var(--muted-foreground)' },
@@ -330,7 +330,7 @@ function ChartTabs({ profiles }: { profiles: ProfilesResponse }) {
                 yAxisId="energy"
                 type="monotone"
                 dataKey="solar_mwh"
-                name="Solar (MWh/h)"
+                name="Solar (MW)"
                 stroke={SOLAR_COLOR}
                 fill="url(#bold-solar-week)"
                 strokeWidth={1.4}
@@ -339,7 +339,7 @@ function ChartTabs({ profiles }: { profiles: ProfilesResponse }) {
                 yAxisId="energy"
                 type="monotone"
                 dataKey="load_mwh"
-                name="Load (MWh/h)"
+                name="Load (MW)"
                 stroke={LOAD_COLOR}
                 strokeWidth={1.4}
                 dot={false}

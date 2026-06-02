@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Slider } from '@/components/ui/slider'
+import { LocationMap } from '@/components/location-map'
 import type { PPAConfig } from '@/lib/api'
 
 interface ConfigPanelProps {
@@ -120,6 +121,8 @@ export function ConfigPanel({
     setDraft((d) => ({ ...d, load: { ...d.load, ...patch } }))
   const setDeal = (patch: Partial<PPAConfig['deal']>) =>
     setDraft((d) => ({ ...d, deal: { ...d.deal, ...patch } }))
+  const setLocation = (patch: Partial<PPAConfig['location']>) =>
+    setDraft((d) => ({ ...d, location: { ...d.location, ...patch } }))
 
   const handleReset = async () => {
     const defaults = await onReset()
@@ -142,6 +145,65 @@ export function ConfigPanel({
             14 parameters · live preview on apply
           </div>
         </div>
+
+        <section className="space-y-2.5">
+          <SectionChip
+            color={accent}
+            icon="◎"
+            title="Asset location"
+            count="lat / lon"
+          />
+          <div className="flex flex-col gap-2.5 pl-0.5">
+            <LocationMap
+              lat={draft.location.lat}
+              lon={draft.location.lon}
+              onChange={(lat, lon) => setLocation({ lat, lon })}
+              height={200}
+            />
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1">
+                <Label
+                  htmlFor="loc_lat"
+                  className="text-[11px] text-muted-foreground"
+                >
+                  Latitude
+                </Label>
+                <Input
+                  id="loc_lat"
+                  type="number"
+                  step="0.0001"
+                  className="font-mono text-[11.5px]"
+                  value={draft.location.lat}
+                  onChange={(e) =>
+                    setLocation({ lat: Number(e.target.value) })
+                  }
+                />
+              </div>
+              <div className="space-y-1">
+                <Label
+                  htmlFor="loc_lon"
+                  className="text-[11px] text-muted-foreground"
+                >
+                  Longitude
+                </Label>
+                <Input
+                  id="loc_lon"
+                  type="number"
+                  step="0.0001"
+                  className="font-mono text-[11.5px]"
+                  value={draft.location.lon}
+                  onChange={(e) =>
+                    setLocation({ lon: Number(e.target.value) })
+                  }
+                />
+              </div>
+            </div>
+            <p className="text-[10.5px] text-muted-foreground">
+              Click the map or drag the pin to relocate the asset. Drives
+              <code className="mx-0.5 font-mono">pvlib</code> solar geometry.
+            </p>
+          </div>
+        </section>
 
         <section className="space-y-2.5">
           <SectionChip color={solar} icon="☀" title="Solar PV" count="6 params" />
