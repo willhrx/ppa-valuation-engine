@@ -76,12 +76,14 @@ class MarketPriceConfigSchema(BaseModel):
     wind_cf_phi: float = Field(default=0.95, ge=0.0, lt=1.0)
     wind_cf_logit_scale: float = 0.60
     wind_reference_cf: float = Field(default=0.33, gt=0.0, lt=1.0)
-    beta_wind_2027: float = 35.0
-    beta_wind_2036: float = 75.0
+    # Contract-relative ramp anchors: *_start applies in the first contract
+    # year, *_end in the last; the engine interpolates linearly between them.
+    beta_wind_start: float = 35.0
+    beta_wind_end: float = 75.0
     wind_seed: int = 43
 
-    cannibalisation_alpha_2027: float = 40.0
-    cannibalisation_alpha_2036: float = 60.0
+    cannibalisation_alpha_start: float = 40.0
+    cannibalisation_alpha_end: float = 60.0
     # ρ ∈ [0, 1]. Couples layer-4 (cannibalisation) depth to the realised
     # asset cloud factor: high-irradiance days get a deeper midday dip,
     # overcast days a shallower one. ρ = 0 reproduces the legacy purely

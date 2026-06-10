@@ -9,7 +9,7 @@ series.  Negative prices are allowed (real EPEX NL goes negative on sunny,
 windy Sundays).
 
 Layer 1 — Long-term level and drift
-    level(t) = base_price + drift × years_from_2027(t)
+    level(t) = base_price + drift × years_from_contract_start(t)
     Highest uncertainty; always report as a sensitivity.
 
 Layer 2 — Seasonal shape
@@ -28,7 +28,7 @@ Layer 3b — Wind supply suppression (stochastic, per Monte Carlo path)
     reflecting Dutch wind climatology (winter > summer) and a small diurnal
     adder (overnight slightly higher, mid-afternoon slightly lower).
     layer3b(t) = −β(year) × (wind_cf(t) − reference_cf)
-    β grows linearly 2027→2036 reflecting NL offshore-wind buildout.  Above-
+    β grows linearly start→end of the contract reflecting NL offshore-wind buildout.  Above-
     mean wind suppresses prices, below-mean lifts them.
 
 Layer 4 — Solar cannibalisation
@@ -39,7 +39,7 @@ Layer 4 — Solar cannibalisation
     the legacy synthetic sin(hour)×sin(doy) product so the cannibalisation dip
     is in real-time-of-day alignment with the asset's actual production peak
     (both share pvlib's solar geometry).
-    α grows linearly from 2027→2036 reflecting continued solar build-out.
+    α grows linearly start→end of the contract reflecting continued solar build-out.
     modulation(t) ties the dip to the realised asset cloud factor via
     ρ = market.production_cannibalisation_correlation.  Critical for
     capture-rate erosion: mid-summer noon prices start ~45 EUR/MWh in 2027 and
@@ -168,7 +168,7 @@ def _layer3b_wind_supply(
     layer3b(t) = −β(year) × (wind_cf(t) − reference_cf)
 
     Above-mean wind realisations suppress prices; below-mean realisations lift
-    them. β(year) grows linearly from beta_wind_2027 to beta_wind_2036 to
+    them. β(year) grows linearly from beta_wind_start to beta_wind_end to
     reflect Dutch offshore-wind buildout.
 
     Parameters
@@ -187,8 +187,8 @@ def _layer3b_wind_supply(
         wind_cf = compute_wind_factor(times, config, seed=seed)
 
     years = (times.year.to_numpy() - start_year).astype(float)
-    beta = mc.beta_wind_2027 + (
-        mc.beta_wind_2036 - mc.beta_wind_2027
+    beta = mc.beta_wind_start + (
+        mc.beta_wind_end - mc.beta_wind_start
     ) * years / tenor
 
     deviation = np.asarray(wind_cf, dtype=float) - mc.wind_reference_cf
@@ -241,7 +241,8 @@ def _layer4_cannibalisation(
 
     ``system_solar_proxy`` is the pvlib-derived NL-wide shape ∈ [0, 1] with
     peak = 1.0 at solar noon in late June at the system reference location.
-    α(year) interpolates linearly from alpha_2027 to alpha_2036.
+    α(year) interpolates linearly from cannibalisation_alpha_start at the
+    contract start year to cannibalisation_alpha_end at the contract end year.
 
     Parameters
     ----------
@@ -283,8 +284,8 @@ def _layer4_cannibalisation(
         modulation = np.clip((1.0 - rho) + rho * relative_clearness, 0.0, 2.5)
         proxy = proxy * modulation
 
-    alpha = mc.cannibalisation_alpha_2027 + (
-        mc.cannibalisation_alpha_2036 - mc.cannibalisation_alpha_2027
+    alpha = mc.cannibalisation_alpha_start + (
+        mc.cannibalisation_alpha_end - mc.cannibalisation_alpha_start
     ) * years / tenor
 
     return -alpha * proxy

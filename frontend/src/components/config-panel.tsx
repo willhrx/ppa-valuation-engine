@@ -113,6 +113,11 @@ export function ConfigPanel({
   const [draft, setDraft] = useState<PPAConfig>(initial)
   const [baseStrike, setBaseStrike] = useState<number>(initialBaseStrike)
 
+  // Year-anchored labels follow the chosen deal dates: the cannibalisation /
+  // base-price ramps are contract-relative in the engine (start -> end year).
+  const startYear = draft.deal.start_date.slice(0, 4)
+  const endYear = draft.deal.end_date.slice(0, 4)
+
   const setSolar = (patch: Partial<PPAConfig['solar']>) =>
     setDraft((d) => ({ ...d, solar: { ...d.solar, ...patch } }))
   const setMarket = (patch: Partial<PPAConfig['market']>) =>
@@ -284,7 +289,7 @@ export function ConfigPanel({
           <div className="flex flex-col gap-2.5 pl-0.5">
             <SliderRow
               id="base_price"
-              label="Base price 2027"
+              label={`Base price ${startYear}`}
               unit="€/MWh"
               digits={0}
               min={40}
@@ -329,26 +334,26 @@ export function ConfigPanel({
               onChange={(v) => setMarket({ ar1_phi: v })}
             />
             <SliderRow
-              id="alpha_2027"
-              label="Cannib. α 2027"
+              id="alpha_start"
+              label={`Cannib. α ${startYear}`}
               digits={0}
               min={20}
               max={100}
               step={5}
               tone={price}
-              value={draft.market.cannibalisation_alpha_2027}
-              onChange={(v) => setMarket({ cannibalisation_alpha_2027: v })}
+              value={draft.market.cannibalisation_alpha_start}
+              onChange={(v) => setMarket({ cannibalisation_alpha_start: v })}
             />
             <SliderRow
-              id="alpha_2036"
-              label="Cannib. α 2036"
+              id="alpha_end"
+              label={`Cannib. α ${endYear}`}
               digits={0}
               min={40}
               max={150}
               step={5}
               tone={price}
-              value={draft.market.cannibalisation_alpha_2036}
-              onChange={(v) => setMarket({ cannibalisation_alpha_2036: v })}
+              value={draft.market.cannibalisation_alpha_end}
+              onChange={(v) => setMarket({ cannibalisation_alpha_end: v })}
             />
           </div>
         </section>

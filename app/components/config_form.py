@@ -93,13 +93,13 @@ def render_market(config: PPAConfig) -> None:
             "AR(1) noise φ", 0.30, 0.95, value=float(mc.ar1_phi), step=0.05,
             key="cfg_ar1_phi",
         )
-        mc.cannibalisation_alpha_2027 = float(st.slider(
-            "Cannibalisation α 2027", 20, 100, value=int(mc.cannibalisation_alpha_2027),
-            step=5, key="cfg_alpha_2027",
+        mc.cannibalisation_alpha_start = float(st.slider(
+            "Cannibalisation α (contract start)", 20, 100, value=int(mc.cannibalisation_alpha_start),
+            step=5, key="cfg_alpha_start",
         ))
-        mc.cannibalisation_alpha_2036 = float(st.slider(
-            "Cannibalisation α 2036", 40, 150, value=int(mc.cannibalisation_alpha_2036),
-            step=5, key="cfg_alpha_2036",
+        mc.cannibalisation_alpha_end = float(st.slider(
+            "Cannibalisation α (contract end)", 40, 150, value=int(mc.cannibalisation_alpha_end),
+            step=5, key="cfg_alpha_end",
         ))
 
 

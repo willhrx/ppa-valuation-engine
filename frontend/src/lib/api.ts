@@ -85,8 +85,6 @@ export type ConsumerLoadConfig = Required<Schemas['ConsumerLoadConfigSchema']>
 export type DealConfig = Required<Schemas['DealConfigSchema']>
 export type PPAConfig = Required<Schemas['PPAConfigSchema']>
 
-export type TimeSeriesPoint = Schemas['TimeSeriesPoint']
-export type PreviewResponse = Schemas['PreviewResponse']
 export type ProfilesResponse = Schemas['ProfilesResponse']
 export type ValuationRow = Schemas['ValuationRowSchema']
 export type ValuationMatrixResponse = Schemas['ValuationMatrixResponse']
@@ -113,8 +111,6 @@ export const api = {
     apiGet<PPAConfig>('/api/config/defaults', signal),
   configValidate: (config: PPAConfig, signal?: AbortSignal) =>
     apiPost<PPAConfig>('/api/config/validate', config, signal),
-  preview: (config: PPAConfig, signal?: AbortSignal) =>
-    apiPost<PreviewResponse>('/api/preview', config, signal),
   profiles: (config: PPAConfig, signal?: AbortSignal) =>
     apiPost<ProfilesResponse>('/api/profiles', config, signal),
   valuationMatrix: (

@@ -3,23 +3,6 @@ from __future__ import annotations
 from pydantic import BaseModel
 
 
-class TimeSeriesPoint(BaseModel):
-    timestamp: str
-    value: float
-
-
-class PreviewResponse(BaseModel):
-    solar_annual_yield_kwh_per_kwp: float
-    solar_total_gwh: float
-    avg_price_eur_mwh: float
-    total_load_gwh: float
-    hedge_ratio: float
-    capture_rate: float
-    sample_week_solar: list[TimeSeriesPoint]
-    sample_week_prices: list[TimeSeriesPoint]
-    sample_week_load: list[TimeSeriesPoint]
-
-
 class ProfilesResponse(BaseModel):
     """
     Full-horizon raw hourly series (column-oriented).

@@ -76,23 +76,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/preview": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Preview Central Scenario */
-        post: operations["preview_central_scenario_api_preview_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/valuation/matrix": {
         parameters: {
             query?: never;
@@ -378,10 +361,10 @@ export interface components {
              *         "ar1_phi": 0.7,
              *         "ar1_sigma": 8,
              *         "base_price": 83,
-             *         "beta_wind_2027": 35,
-             *         "beta_wind_2036": 75,
-             *         "cannibalisation_alpha_2027": 40,
-             *         "cannibalisation_alpha_2036": 60,
+             *         "beta_wind_end": 75,
+             *         "beta_wind_start": 35,
+             *         "cannibalisation_alpha_end": 60,
+             *         "cannibalisation_alpha_start": 40,
              *         "demand_peak_day": 15,
              *         "demand_weekday_shape": [
              *           -10,
@@ -792,30 +775,30 @@ export interface components {
              */
             wind_reference_cf: number;
             /**
-             * Beta Wind 2027
+             * Beta Wind Start
              * @default 35
              */
-            beta_wind_2027: number;
+            beta_wind_start: number;
             /**
-             * Beta Wind 2036
+             * Beta Wind End
              * @default 75
              */
-            beta_wind_2036: number;
+            beta_wind_end: number;
             /**
              * Wind Seed
              * @default 43
              */
             wind_seed: number;
             /**
-             * Cannibalisation Alpha 2027
+             * Cannibalisation Alpha Start
              * @default 40
              */
-            cannibalisation_alpha_2027: number;
+            cannibalisation_alpha_start: number;
             /**
-             * Cannibalisation Alpha 2036
+             * Cannibalisation Alpha End
              * @default 60
              */
-            cannibalisation_alpha_2036: number;
+            cannibalisation_alpha_end: number;
             /**
              * Production Cannibalisation Correlation
              * @default 0.65
@@ -947,10 +930,10 @@ export interface components {
              *         "ar1_phi": 0.7,
              *         "ar1_sigma": 8,
              *         "base_price": 83,
-             *         "beta_wind_2027": 35,
-             *         "beta_wind_2036": 75,
-             *         "cannibalisation_alpha_2027": 40,
-             *         "cannibalisation_alpha_2036": 60,
+             *         "beta_wind_end": 75,
+             *         "beta_wind_start": 35,
+             *         "cannibalisation_alpha_end": 60,
+             *         "cannibalisation_alpha_start": 40,
              *         "demand_peak_day": 15,
              *         "demand_weekday_shape": [
              *           -10,
@@ -1178,27 +1161,6 @@ export interface components {
             /** Prob Negative */
             prob_negative: number;
         };
-        /** PreviewResponse */
-        PreviewResponse: {
-            /** Solar Annual Yield Kwh Per Kwp */
-            solar_annual_yield_kwh_per_kwp: number;
-            /** Solar Total Gwh */
-            solar_total_gwh: number;
-            /** Avg Price Eur Mwh */
-            avg_price_eur_mwh: number;
-            /** Total Load Gwh */
-            total_load_gwh: number;
-            /** Hedge Ratio */
-            hedge_ratio: number;
-            /** Capture Rate */
-            capture_rate: number;
-            /** Sample Week Solar */
-            sample_week_solar: components["schemas"]["TimeSeriesPoint"][];
-            /** Sample Week Prices */
-            sample_week_prices: components["schemas"]["TimeSeriesPoint"][];
-            /** Sample Week Load */
-            sample_week_load: components["schemas"]["TimeSeriesPoint"][];
-        };
         /**
          * ProfilesResponse
          * @description Full-horizon raw hourly series (column-oriented).
@@ -1267,10 +1229,10 @@ export interface components {
              *         "ar1_phi": 0.7,
              *         "ar1_sigma": 8,
              *         "base_price": 83,
-             *         "beta_wind_2027": 35,
-             *         "beta_wind_2036": 75,
-             *         "cannibalisation_alpha_2027": 40,
-             *         "cannibalisation_alpha_2036": 60,
+             *         "beta_wind_end": 75,
+             *         "beta_wind_start": 35,
+             *         "cannibalisation_alpha_end": 60,
+             *         "cannibalisation_alpha_start": 40,
              *         "demand_peak_day": 15,
              *         "demand_weekday_shape": [
              *           -10,
@@ -1552,13 +1514,6 @@ export interface components {
             /** Pricing Structure */
             pricing_structure: string;
         };
-        /** TimeSeriesPoint */
-        TimeSeriesPoint: {
-            /** Timestamp */
-            timestamp: string;
-            /** Value */
-            value: number;
-        };
         /** TornadoEntrySchema */
         TornadoEntrySchema: {
             /** Parameter */
@@ -1620,10 +1575,10 @@ export interface components {
              *         "ar1_phi": 0.7,
              *         "ar1_sigma": 8,
              *         "base_price": 83,
-             *         "beta_wind_2027": 35,
-             *         "beta_wind_2036": 75,
-             *         "cannibalisation_alpha_2027": 40,
-             *         "cannibalisation_alpha_2036": 60,
+             *         "beta_wind_end": 75,
+             *         "beta_wind_start": 35,
+             *         "cannibalisation_alpha_end": 60,
+             *         "cannibalisation_alpha_start": 40,
              *         "demand_peak_day": 15,
              *         "demand_weekday_shape": [
              *           -10,
@@ -1882,10 +1837,10 @@ export interface components {
              *         "ar1_phi": 0.7,
              *         "ar1_sigma": 8,
              *         "base_price": 83,
-             *         "beta_wind_2027": 35,
-             *         "beta_wind_2036": 75,
-             *         "cannibalisation_alpha_2027": 40,
-             *         "cannibalisation_alpha_2036": 60,
+             *         "beta_wind_end": 75,
+             *         "beta_wind_start": 35,
+             *         "cannibalisation_alpha_end": 60,
+             *         "cannibalisation_alpha_start": 40,
              *         "demand_peak_day": 15,
              *         "demand_weekday_shape": [
              *           -10,
@@ -2191,39 +2146,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProfilesResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    preview_central_scenario_api_preview_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["PPAConfigSchema"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PreviewResponse"];
                 };
             };
             /** @description Validation Error */

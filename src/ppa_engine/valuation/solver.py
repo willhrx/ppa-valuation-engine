@@ -588,7 +588,7 @@ _DEFAULT_TORNADO_PARAMS: list[tuple[str, str, float]] = [
     ("market.base_price",                  "Base price (EUR/MWh)",        10.0),
     ("market.drift",                       "Price drift (EUR/MWh/yr)",     0.5),
     ("market.ar1_sigma",                   "Price AR(1) sigma",            3.0),
-    ("market.cannibalisation_alpha_2036",  "Cannib. alpha 2036",          10.0),
+    ("market.cannibalisation_alpha_end",   "Cannib. alpha (end of tenor)", 10.0),
     ("solar.cloud_factor_phi",             "Cloud persistence",            0.05),
     ("solar.degradation_rate",             "Degradation rate",             0.001),
     ("deal.discount_rate",                 "Discount rate",                0.01),

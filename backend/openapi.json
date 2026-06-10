@@ -112,47 +112,6 @@
         }
       }
     },
-    "/api/preview": {
-      "post": {
-        "tags": [
-          "preview"
-        ],
-        "summary": "Preview Central Scenario",
-        "operationId": "preview_central_scenario_api_preview_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/PPAConfigSchema"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PreviewResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/valuation/matrix": {
       "post": {
         "tags": [
@@ -621,10 +580,10 @@
                 "ar1_phi": 0.7,
                 "ar1_sigma": 8.0,
                 "base_price": 83.0,
-                "beta_wind_2027": 35.0,
-                "beta_wind_2036": 75.0,
-                "cannibalisation_alpha_2027": 40.0,
-                "cannibalisation_alpha_2036": 60.0,
+                "beta_wind_end": 75.0,
+                "beta_wind_start": 35.0,
+                "cannibalisation_alpha_end": 60.0,
+                "cannibalisation_alpha_start": 40.0,
                 "demand_peak_day": 15,
                 "demand_weekday_shape": [
                   -10.0,
@@ -1111,14 +1070,14 @@
             "title": "Wind Reference Cf",
             "default": 0.33
           },
-          "beta_wind_2027": {
+          "beta_wind_start": {
             "type": "number",
-            "title": "Beta Wind 2027",
+            "title": "Beta Wind Start",
             "default": 35.0
           },
-          "beta_wind_2036": {
+          "beta_wind_end": {
             "type": "number",
-            "title": "Beta Wind 2036",
+            "title": "Beta Wind End",
             "default": 75.0
           },
           "wind_seed": {
@@ -1126,14 +1085,14 @@
             "title": "Wind Seed",
             "default": 43
           },
-          "cannibalisation_alpha_2027": {
+          "cannibalisation_alpha_start": {
             "type": "number",
-            "title": "Cannibalisation Alpha 2027",
+            "title": "Cannibalisation Alpha Start",
             "default": 40.0
           },
-          "cannibalisation_alpha_2036": {
+          "cannibalisation_alpha_end": {
             "type": "number",
-            "title": "Cannibalisation Alpha 2036",
+            "title": "Cannibalisation Alpha End",
             "default": 60.0
           },
           "production_cannibalisation_correlation": {
@@ -1345,10 +1304,10 @@
                 "ar1_phi": 0.7,
                 "ar1_sigma": 8.0,
                 "base_price": 83.0,
-                "beta_wind_2027": 35.0,
-                "beta_wind_2036": 75.0,
-                "cannibalisation_alpha_2027": 40.0,
-                "cannibalisation_alpha_2036": 60.0,
+                "beta_wind_end": 75.0,
+                "beta_wind_start": 35.0,
+                "cannibalisation_alpha_end": 60.0,
+                "cannibalisation_alpha_start": 40.0,
                 "demand_peak_day": 15,
                 "demand_weekday_shape": [
                   -10.0,
@@ -1651,68 +1610,6 @@
         ],
         "title": "PathDistributionSchema"
       },
-      "PreviewResponse": {
-        "properties": {
-          "solar_annual_yield_kwh_per_kwp": {
-            "type": "number",
-            "title": "Solar Annual Yield Kwh Per Kwp"
-          },
-          "solar_total_gwh": {
-            "type": "number",
-            "title": "Solar Total Gwh"
-          },
-          "avg_price_eur_mwh": {
-            "type": "number",
-            "title": "Avg Price Eur Mwh"
-          },
-          "total_load_gwh": {
-            "type": "number",
-            "title": "Total Load Gwh"
-          },
-          "hedge_ratio": {
-            "type": "number",
-            "title": "Hedge Ratio"
-          },
-          "capture_rate": {
-            "type": "number",
-            "title": "Capture Rate"
-          },
-          "sample_week_solar": {
-            "items": {
-              "$ref": "#/components/schemas/TimeSeriesPoint"
-            },
-            "type": "array",
-            "title": "Sample Week Solar"
-          },
-          "sample_week_prices": {
-            "items": {
-              "$ref": "#/components/schemas/TimeSeriesPoint"
-            },
-            "type": "array",
-            "title": "Sample Week Prices"
-          },
-          "sample_week_load": {
-            "items": {
-              "$ref": "#/components/schemas/TimeSeriesPoint"
-            },
-            "type": "array",
-            "title": "Sample Week Load"
-          }
-        },
-        "type": "object",
-        "required": [
-          "solar_annual_yield_kwh_per_kwp",
-          "solar_total_gwh",
-          "avg_price_eur_mwh",
-          "total_load_gwh",
-          "hedge_ratio",
-          "capture_rate",
-          "sample_week_solar",
-          "sample_week_prices",
-          "sample_week_load"
-        ],
-        "title": "PreviewResponse"
-      },
       "ProfilesResponse": {
         "properties": {
           "timestamps": {
@@ -1829,10 +1726,10 @@
                 "ar1_phi": 0.7,
                 "ar1_sigma": 8.0,
                 "base_price": 83.0,
-                "beta_wind_2027": 35.0,
-                "beta_wind_2036": 75.0,
-                "cannibalisation_alpha_2027": 40.0,
-                "cannibalisation_alpha_2036": 60.0,
+                "beta_wind_end": 75.0,
+                "beta_wind_start": 35.0,
+                "cannibalisation_alpha_end": 60.0,
+                "cannibalisation_alpha_start": 40.0,
                 "demand_peak_day": 15,
                 "demand_weekday_shape": [
                   -10.0,
@@ -2165,24 +2062,6 @@
         ],
         "title": "SolverResultSchema"
       },
-      "TimeSeriesPoint": {
-        "properties": {
-          "timestamp": {
-            "type": "string",
-            "title": "Timestamp"
-          },
-          "value": {
-            "type": "number",
-            "title": "Value"
-          }
-        },
-        "type": "object",
-        "required": [
-          "timestamp",
-          "value"
-        ],
-        "title": "TimeSeriesPoint"
-      },
       "TornadoEntrySchema": {
         "properties": {
           "parameter": {
@@ -2280,10 +2159,10 @@
                 "ar1_phi": 0.7,
                 "ar1_sigma": 8.0,
                 "base_price": 83.0,
-                "beta_wind_2027": 35.0,
-                "beta_wind_2036": 75.0,
-                "cannibalisation_alpha_2027": 40.0,
-                "cannibalisation_alpha_2036": 60.0,
+                "beta_wind_end": 75.0,
+                "beta_wind_start": 35.0,
+                "cannibalisation_alpha_end": 60.0,
+                "cannibalisation_alpha_start": 40.0,
                 "demand_peak_day": 15,
                 "demand_weekday_shape": [
                   -10.0,
@@ -2601,10 +2480,10 @@
                 "ar1_phi": 0.7,
                 "ar1_sigma": 8.0,
                 "base_price": 83.0,
-                "beta_wind_2027": 35.0,
-                "beta_wind_2036": 75.0,
-                "cannibalisation_alpha_2027": 40.0,
-                "cannibalisation_alpha_2036": 60.0,
+                "beta_wind_end": 75.0,
+                "beta_wind_start": 35.0,
+                "cannibalisation_alpha_end": 60.0,
+                "cannibalisation_alpha_start": 40.0,
                 "demand_peak_day": 15,
                 "demand_weekday_shape": [
                   -10.0,

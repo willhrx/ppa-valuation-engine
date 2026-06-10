@@ -265,7 +265,11 @@ def value_all_combinations(
 
     pricing_structures = [
         FixedFlat(strike=base_strike),
-        FixedEscalated(base_strike=base_strike, escalation_rate=0.02),
+        FixedEscalated(
+            base_strike=base_strike,
+            escalation_rate=0.02,
+            base_year=pd.Timestamp(config.deal.start_date).year,
+        ),
         IndexedWithFloorCap(index_factor=0.95, floor=40.0, cap=120.0),
         Floating(),
     ]

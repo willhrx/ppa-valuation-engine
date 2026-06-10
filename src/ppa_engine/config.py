@@ -104,7 +104,7 @@ class MarketPriceConfig:
       - drift: -3 to 0 EUR/MWh/year
       - ar1_phi: 0.5 – 0.9
       - ar1_sigma: 5 – 15 EUR/MWh
-      - beta_wind_2027 / beta_wind_2036: 20 – 80 EUR/MWh per unit-CF deviation
+      - beta_wind_start / beta_wind_end: 20 – 80 EUR/MWh per unit-CF deviation
     """
 
     # Layer 1
@@ -157,22 +157,25 @@ class MarketPriceConfig:
     wind_cf_phi: float = 0.95               # AR(1) autocorrelation
     wind_cf_logit_scale: float = 0.60       # spread of latent AR(1) in logit
     wind_reference_cf: float = 0.33         # subtract from CF before scaling
-    # beta_wind grows linearly 2027→2036, reflecting NL offshore-wind buildout.
-    # Calibrated as a free knob so that combined (3b + 4) reproduces the
-    # capture-rate envelope 0.65–0.85 declining.
-    beta_wind_2027: float = 35.0            # EUR/MWh per unit-CF deviation
-    beta_wind_2036: float = 75.0            # grows to this by 2036
+    # beta_wind grows linearly from contract start to contract end, reflecting
+    # NL offshore-wind buildout over the deal horizon. Calibrated as a free
+    # knob so that combined (3b + 4) reproduces the capture-rate envelope
+    # 0.65–0.85 declining.
+    beta_wind_start: float = 35.0           # EUR/MWh per unit-CF deviation
+    beta_wind_end: float = 75.0             # grows to this by contract end
     wind_seed: int = 43                     # separate from other seeds
 
     # Layer 4 — cannibalisation (solar buildout suppressing midday prices)
-    # Calibrated to achieve capture rate ~0.84 in 2027 declining to ~0.63 by 2036.
+    # Alpha ramps linearly from contract start to contract end. With the
+    # default 2027–2036 deal this is calibrated to a capture rate ~0.84 at
+    # start declining to ~0.63 by the final year.
     # Re-tuned downward (was 70→115) after layer 4's proxy switched from the
     # legacy sin(hour)×sin(doy) synthetic to a pvlib clear-sky shape: with both
     # the asset and the system proxy sharing real solar geometry, the dip and
     # the production peak align hour-by-hour, so each unit of α now lands with
     # much more force.
-    cannibalisation_alpha_2027: float = 40.0   # EUR/MWh at full solar proxy
-    cannibalisation_alpha_2036: float = 60.0   # grows linearly to this by 2036
+    cannibalisation_alpha_start: float = 40.0  # EUR/MWh at full solar proxy
+    cannibalisation_alpha_end: float = 60.0    # grows linearly to this by contract end
 
     # Layer 4 system-reference solar location (NL system-wide solar proxy).
     # The proxy shape is computed via pvlib clear-sky POA at this location,

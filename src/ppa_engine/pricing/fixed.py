@@ -44,15 +44,18 @@ class FixedEscalated(PricingStructure):
         Starting price in EUR/MWh (applied in ``base_year``).
     escalation_rate: float
         Annual escalation fraction (e.g., 0.02 for 2 % per year).
-    base_year: int
-        Reference year for the base strike price.
+    base_year: int | None
+        Reference year for the base strike price. When None (default), the
+        first year of the price series — i.e. the contract start year — is
+        used, so the strike starts at ``base_strike`` regardless of deal
+        dates.
     """
 
     def __init__(
         self,
         base_strike: float,
         escalation_rate: float = 0.02,
-        base_year: int = 2027,
+        base_year: int | None = None,
     ) -> None:
         self.base_strike = base_strike
         self.escalation_rate = escalation_rate
@@ -67,7 +70,9 @@ class FixedEscalated(PricingStructure):
         cached = self._cache
         if cached is not None and cached[0] is index:
             return cached[1]
-        years_elapsed = index.year - self.base_year
+        years = index.year
+        base = self.base_year if self.base_year is not None else int(years.min())
+        years_elapsed = years - base
         strikes = self.base_strike * (1 + self.escalation_rate) ** years_elapsed
         result = pd.Series(strikes, index=index, name="strike_eur_mwh")
         self._cache = (index, result)
