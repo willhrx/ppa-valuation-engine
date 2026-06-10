@@ -21,19 +21,18 @@ import {
 import { PanelError, PanelLoading } from '@/components/spinner'
 import { RiskRowDetail } from '@/components/risk-row-detail'
 import {
-  api,
   type ComboRiskSummary,
-  type PPAConfig,
   type ValuationMatrixResponse,
   type ValuationRow,
 } from '@/lib/api'
 import { fmtEurMillion, fmtEurPerMwh, fmtGwh, fmtPercent } from '@/lib/format'
 import { cn } from '@/lib/utils'
-import { useAsyncCall } from '@/hooks/useAsync'
+import type { AsyncCallHandle } from '@/hooks/useAsync'
 import type { RiskSimulationHandle } from '@/hooks/useRiskSimulation'
 
 interface ValuationMatrixTableProps {
-  config: PPAConfig | null
+  matrix: AsyncCallHandle<ValuationMatrixResponse>
+  hasConfig: boolean
   baseStrike: number
   simulation: RiskSimulationHandle
 }
@@ -68,17 +67,12 @@ const columnHelper = createColumnHelper<ValuationRow>()
 const comboKey = (supply: string, pricing: string) => `${supply}::${pricing}`
 
 export function ValuationMatrixTable({
-  config,
+  matrix,
+  hasConfig,
   baseStrike,
   simulation,
 }: ValuationMatrixTableProps) {
-  const { state, refetch } = useAsyncCall<ValuationMatrixResponse>(
-    (signal) => {
-      if (!config) return Promise.reject(new Error('no config'))
-      return api.valuationMatrix(config, baseStrike, signal)
-    },
-    [config, baseStrike],
-  )
+  const { state, refetch } = matrix
 
   return (
     <Card className="p-0">
@@ -96,7 +90,7 @@ export function ValuationMatrixTable({
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <RunRiskButton simulation={simulation} disabled={!config} />
+          <RunRiskButton simulation={simulation} disabled={!hasConfig} />
           {state.status === 'success' && (
             <button
               type="button"

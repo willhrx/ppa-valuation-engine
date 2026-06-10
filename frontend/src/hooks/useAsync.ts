@@ -8,6 +8,12 @@ export type AsyncState<T> =
   | { status: 'success'; data: T }
   | { status: 'error'; message: string }
 
+/** Shape returned by useAsyncCall — passable down to sharing components. */
+export interface AsyncCallHandle<T> {
+  state: AsyncState<T>
+  refetch: () => void
+}
+
 /**
  * Fires `fn(signal)` whenever any entry in `deps` changes (after the first
  * truthy entry — set deps to `[null]` to suppress until ready).
@@ -18,7 +24,7 @@ export type AsyncState<T> =
 export function useAsyncCall<T>(
   fn: (signal: AbortSignal) => Promise<T>,
   deps: ReadonlyArray<unknown>,
-): { state: AsyncState<T>; refetch: () => void } {
+): AsyncCallHandle<T> {
   const [state, setState] = useState<AsyncState<T>>({ status: 'idle' })
   const fnRef = useRef(fn)
   fnRef.current = fn

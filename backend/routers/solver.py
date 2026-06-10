@@ -47,15 +47,9 @@ def _pricing_class(key: PricingKey):
 
 
 def _central_series(config):
-    from ppa_engine.data.solar_production import generate_solar_production
-    from ppa_engine.data.market_prices import generate_market_prices
-    from ppa_engine.data.consumer_load import generate_consumer_load
+    from backend.cache import central_series
 
-    return (
-        generate_solar_production(config),
-        generate_market_prices(config),
-        generate_consumer_load(config),
-    )
+    return central_series(config)
 
 
 # ---------------------------------------------------------------------------

@@ -5,8 +5,14 @@ import { KpiStrip } from '@/components/kpi-strip'
 import { ProfilesCharts } from '@/components/profiles-charts'
 import { ValuationMatrixTable } from '@/components/valuation-matrix-table'
 import { PanelError, PanelLoading } from '@/components/spinner'
+import { useAsyncCall } from '@/hooks/useAsync'
 import { useRiskSimulation } from '@/hooks/useRiskSimulation'
-import { api, ApiError, type PPAConfig } from '@/lib/api'
+import {
+  api,
+  ApiError,
+  type PPAConfig,
+  type ValuationMatrixResponse,
+} from '@/lib/api'
 
 const DEFAULT_BASE_STRIKE = 65.0
 
@@ -38,6 +44,16 @@ function App() {
   const simulation = useRiskSimulation(
     applied?.config ?? null,
     applied?.baseStrike ?? DEFAULT_BASE_STRIKE,
+  )
+
+  // Single shared valuation-matrix fetch — the KPI strip and the matrix
+  // table previously fired identical POSTs side by side.
+  const matrix = useAsyncCall<ValuationMatrixResponse>(
+    (signal) => {
+      if (!applied) return Promise.reject(new Error('no config'))
+      return api.valuationMatrix(applied.config, applied.baseStrike, signal)
+    },
+    [applied ?? null],
   )
 
   useEffect(() => {
@@ -211,7 +227,7 @@ function App() {
         {defaults.status === 'error' && <PanelError message={defaults.message} />}
         {defaults.status === 'ready' && applied && (
           <div className="flex flex-col gap-4">
-            <KpiStrip config={applied.config} baseStrike={applied.baseStrike} />
+            <KpiStrip matrix={matrix} />
 
             <div className="grid grid-cols-12 gap-4">
               <aside
@@ -236,7 +252,8 @@ function App() {
                 </div>
                 <div id="valuation" className="scroll-mt-20">
                   <ValuationMatrixTable
-                    config={applied.config}
+                    matrix={matrix}
+                    hasConfig={applied !== null}
                     baseStrike={applied.baseStrike}
                     simulation={simulation}
                   />

@@ -22,14 +22,11 @@ def valuation_matrix(body: ValuationMatrixRequest) -> ValuationMatrixResponse:
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
 
-    from ppa_engine.data.solar_production import generate_solar_production
-    from ppa_engine.data.market_prices import generate_market_prices
-    from ppa_engine.data.consumer_load import generate_consumer_load
     from ppa_engine.valuation.engine import value_all_combinations
 
-    solar = generate_solar_production(config)
-    prices = generate_market_prices(config)
-    load = generate_consumer_load(config)
+    from backend.cache import central_series
+
+    solar, prices, load = central_series(config)
 
     df = value_all_combinations(solar, load, prices, config, base_strike=body.base_strike)
     rows = [ValuationRowSchema(**row) for row in df.to_dict(orient="records")]

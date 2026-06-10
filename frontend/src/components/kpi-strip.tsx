@@ -1,11 +1,10 @@
 import { useMemo } from 'react'
 
-import { api, type PPAConfig, type ValuationMatrixResponse } from '@/lib/api'
-import { useAsyncCall } from '@/hooks/useAsync'
+import { type ValuationMatrixResponse } from '@/lib/api'
+import type { AsyncCallHandle } from '@/hooks/useAsync'
 
 interface KpiStripProps {
-  config: PPAConfig | null
-  baseStrike: number
+  matrix: AsyncCallHandle<ValuationMatrixResponse>
 }
 
 interface KpiCardProps {
@@ -86,14 +85,8 @@ function PillBadge({
   )
 }
 
-export function KpiStrip({ config, baseStrike }: KpiStripProps) {
-  const { state } = useAsyncCall<ValuationMatrixResponse>(
-    (signal) => {
-      if (!config) return Promise.reject(new Error('no config'))
-      return api.valuationMatrix(config, baseStrike, signal)
-    },
-    [config, baseStrike],
-  )
+export function KpiStrip({ matrix }: KpiStripProps) {
+  const { state } = matrix
 
   const stats = useMemo(() => {
     if (state.status !== 'success') return null
