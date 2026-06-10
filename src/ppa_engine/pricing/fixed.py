@@ -57,8 +57,18 @@ class FixedEscalated(PricingStructure):
         self.base_strike = base_strike
         self.escalation_rate = escalation_rate
         self.base_year = base_year
+        # Extracting .year from a tz-aware 87k-hour index costs ~50ms; the
+        # valuation engine calls this once per supply structure with the very
+        # same index — cache the result by index identity.
+        self._cache: tuple[pd.Index, pd.Series] | None = None
 
     def strike_price(self, market_prices: pd.Series) -> pd.Series:
-        years_elapsed = market_prices.index.year - self.base_year
+        index = market_prices.index
+        cached = self._cache
+        if cached is not None and cached[0] is index:
+            return cached[1]
+        years_elapsed = index.year - self.base_year
         strikes = self.base_strike * (1 + self.escalation_rate) ** years_elapsed
-        return pd.Series(strikes, index=market_prices.index, name="strike_eur_mwh")
+        result = pd.Series(strikes, index=index, name="strike_eur_mwh")
+        self._cache = (index, result)
+        return result

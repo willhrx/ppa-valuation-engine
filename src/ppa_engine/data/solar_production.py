@@ -112,7 +112,7 @@ def compute_cloud_factor(
     """
     sc = config.solar
     monthly_logit = np.array([logit(m) for m in sc.monthly_cloud_means])
-    hour_logit_mean = monthly_logit[np.array([t.month - 1 for t in times])]
+    hour_logit_mean = monthly_logit[times.month.to_numpy() - 1]
     return ar1_logit_process(
         n=len(times),
         phi=sc.cloud_factor_phi,
@@ -197,7 +197,7 @@ def generate_solar_production(config: PPAConfig | None = None) -> pd.Series:
 
     # Step 4: annual degradation factor (linear, from base year)
     start_year = pd.Timestamp(dc.start_date).year
-    year_offset = np.array([t.year - start_year for t in times])
+    year_offset = times.year.to_numpy() - start_year
     degradation = 1.0 - sc.degradation_rate * year_offset
 
     # Step 5: AC output

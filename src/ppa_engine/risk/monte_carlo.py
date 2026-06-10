@@ -19,7 +19,9 @@ Variance decomposition uses the three-ensemble method:
 from __future__ import annotations
 
 import logging
+import os
 import time
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import dataclass
 
 import numpy as np
@@ -174,24 +176,28 @@ def _price_series(
 # ---------------------------------------------------------------------------
 
 
-def _run_ensemble(
-    mode: str,
-    times: pd.DatetimeIndex,
-    poa_clearsky: np.ndarray,
-    degradation: np.ndarray,
-    deterministic_price_1_2_3a: np.ndarray,
-    system_solar_proxy: np.ndarray,
-    load: pd.Series,
-    config: PPAConfig,
-    n_paths: int,
-    base_strike: float,
-    central_solar: pd.Series,
-    central_prices: pd.Series,
-    central_cloud: np.ndarray,
-    central_wind: np.ndarray,
-) -> pd.DataFrame:
+@dataclass
+class _PathInputs:
+    """Shared, deterministic inputs every path needs. Picklable so the
+    parallel runner can ship one copy to each worker process."""
+
+    times: pd.DatetimeIndex
+    poa_clearsky: np.ndarray
+    degradation: np.ndarray
+    deterministic_price_1_2_3a: np.ndarray
+    system_solar_proxy: np.ndarray
+    load: pd.Series
+    config: PPAConfig
+    base_strike: float
+    central_solar: pd.Series
+    central_prices: pd.Series
+    central_cloud: np.ndarray
+    central_wind: np.ndarray
+
+
+def _simulate_one_path(inp: _PathInputs, mode: str, i: int) -> pd.DataFrame:
     """
-    Run n_paths for one decomposition mode.
+    Value all 12 combinations for path i of one decomposition mode.
 
     mode='joint'  — independent solar, wind and price-noise seeds; layer 3b
                     uses the path wind factor, layer 4 uses the path cloud.
@@ -204,60 +210,91 @@ def _run_ensemble(
                     isolates the volume-driven (production-side) component
                     of revenue risk. Layer-5 noise stays at the central seed.
     """
+    times, config = inp.times, inp.config
+    if mode == "volume":
+        cloud = _cloud_series(
+            times, config, _VOLUME_SOLAR_BASE + i * _PATH_PRIME,
+        )
+        solar = _solar_from_cloud(
+            times, inp.poa_clearsky, inp.degradation, config, cloud,
+        )
+        prices = _price_series(
+            times, inp.deterministic_price_1_2_3a, config,
+            config.market.seed,
+            cloud_factor=cloud,
+            wind_factor=inp.central_wind,
+            system_solar_proxy=inp.system_solar_proxy,
+        )
+    elif mode == "price":
+        solar = inp.central_solar
+        wind = _wind_series(
+            times, config, _PRICE_WIND_BASE + i * _PATH_PRIME,
+        )
+        prices = _price_series(
+            times, inp.deterministic_price_1_2_3a, config,
+            _PRICE_PRICE_BASE + i * _PATH_PRIME,
+            cloud_factor=inp.central_cloud,
+            wind_factor=wind,
+            system_solar_proxy=inp.system_solar_proxy,
+        )
+    else:  # joint
+        cloud = _cloud_series(
+            times, config, _JOINT_SOLAR_BASE + i * _PATH_PRIME,
+        )
+        wind = _wind_series(
+            times, config, _JOINT_WIND_BASE + i * _PATH_PRIME,
+        )
+        solar = _solar_from_cloud(
+            times, inp.poa_clearsky, inp.degradation, config, cloud,
+        )
+        prices = _price_series(
+            times, inp.deterministic_price_1_2_3a, config,
+            _JOINT_PRICE_BASE + i * _PATH_PRIME,
+            cloud_factor=cloud,
+            wind_factor=wind,
+            system_solar_proxy=inp.system_solar_proxy,
+        )
+
+    combo = value_all_combinations(
+        solar, inp.load, prices, config, base_strike=inp.base_strike
+    )
+    combo["path"] = i
+    combo["mode"] = mode
+    return combo
+
+
+# Worker-process state: each ProcessPoolExecutor worker receives the shared
+# inputs once (via initializer) instead of per task, keeping pickling cheap.
+_WORKER_INPUTS: _PathInputs | None = None
+
+
+def _pool_init(inp: _PathInputs) -> None:
+    global _WORKER_INPUTS
+    _WORKER_INPUTS = inp
+
+
+def _run_chunk(task: tuple[str, list[int]]) -> pd.DataFrame:
+    mode, indices = task
+    assert _WORKER_INPUTS is not None, "_pool_init must run in each worker"
+    return pd.concat(
+        [_simulate_one_path(_WORKER_INPUTS, mode, i) for i in indices],
+        ignore_index=True,
+    )
+
+
+def _run_ensemble(
+    mode: str,
+    inp: _PathInputs,
+    n_paths: int,
+) -> pd.DataFrame:
+    """Sequential fallback: run n_paths for one decomposition mode."""
     logger.info("[%s] running %d paths...", mode, n_paths)
 
     t0 = time.time()
     rows: list[pd.DataFrame] = []
 
     for i in range(n_paths):
-        if mode == "volume":
-            cloud = _cloud_series(
-                times, config, _VOLUME_SOLAR_BASE + i * _PATH_PRIME,
-            )
-            solar = _solar_from_cloud(
-                times, poa_clearsky, degradation, config, cloud,
-            )
-            prices = _price_series(
-                times, deterministic_price_1_2_3a, config,
-                config.market.seed,
-                cloud_factor=cloud,
-                wind_factor=central_wind,
-                system_solar_proxy=system_solar_proxy,
-            )
-        elif mode == "price":
-            solar = central_solar
-            wind = _wind_series(
-                times, config, _PRICE_WIND_BASE + i * _PATH_PRIME,
-            )
-            prices = _price_series(
-                times, deterministic_price_1_2_3a, config,
-                _PRICE_PRICE_BASE + i * _PATH_PRIME,
-                cloud_factor=central_cloud,
-                wind_factor=wind,
-                system_solar_proxy=system_solar_proxy,
-            )
-        else:  # joint
-            cloud = _cloud_series(
-                times, config, _JOINT_SOLAR_BASE + i * _PATH_PRIME,
-            )
-            wind = _wind_series(
-                times, config, _JOINT_WIND_BASE + i * _PATH_PRIME,
-            )
-            solar = _solar_from_cloud(
-                times, poa_clearsky, degradation, config, cloud,
-            )
-            prices = _price_series(
-                times, deterministic_price_1_2_3a, config,
-                _JOINT_PRICE_BASE + i * _PATH_PRIME,
-                cloud_factor=cloud,
-                wind_factor=wind,
-                system_solar_proxy=system_solar_proxy,
-            )
-
-        combo = value_all_combinations(solar, load, prices, config, base_strike=base_strike)
-        combo["path"] = i
-        combo["mode"] = mode
-        rows.append(combo)
+        rows.append(_simulate_one_path(inp, mode, i))
 
         if (i + 1) % 100 == 0 or i == n_paths - 1:
             elapsed = time.time() - t0
@@ -282,6 +319,7 @@ def run_monte_carlo(
     base_strike: float = 65.0,
     modes: list[str] | None = None,
     verbose: bool = True,
+    n_jobs: int | None = None,
 ) -> MonteCarloResult:
     """
     Run the full three-ensemble Monte Carlo simulation.
@@ -298,6 +336,11 @@ def run_monte_carlo(
         Subset of ['joint', 'price', 'volume']. Default: all three.
     verbose : bool
         Print progress to stdout.
+    n_jobs : int | None
+        Worker processes for path simulation. None (default) uses
+        cpu_count - 1 (min 1). Pass 1 to force the sequential runner.
+        Results are identical regardless of n_jobs — every path's seeds are
+        derived from its index, so parallel scheduling cannot change values.
 
     Returns
     -------
@@ -305,9 +348,11 @@ def run_monte_carlo(
 
     Performance contract
     --------------------
-    With n_paths=1000 and all three modes, total runtime is 40–60s on a modern
-    laptop (dominated by 3,000 calls to value_all_combinations).
-    Deterministic inputs (pvlib clear-sky, price layers 1–4) are computed once.
+    Per path: dominated by value_all_combinations (~0.4s) plus per-path AR(1)
+    weather/noise draws (~0.1s, scipy-vectorised). Paths are distributed over
+    n_jobs worker processes, so 500 paths x 3 modes ≈ (1500 x 0.5s) / n_jobs.
+    Deterministic inputs (pvlib clear-sky, price layers 1–3a) are computed
+    once and shipped to each worker via the pool initializer.
 
     Seed scheme (no collisions guaranteed by large prime offsets)
     -------------------------------------------------------------
@@ -354,7 +399,7 @@ def run_monte_carlo(
     system_solar_proxy = compute_system_solar_proxy(times, config)
 
     start_year = pd.Timestamp(config.deal.start_date).year
-    year_offset = np.array([t.year - start_year for t in times])
+    year_offset = times.year.to_numpy() - start_year
     degradation = 1.0 - config.solar.degradation_rate * year_offset
 
     # Layers 1, 2 and 3a are independent of realised weather and can be
@@ -387,15 +432,56 @@ def run_monte_carlo(
         central_solar, load, central_prices, config, base_strike=base_strike
     )
 
-    # Step 4: run ensembles
-    frames: list[pd.DataFrame] = []
-    for mode in modes:
-        df = _run_ensemble(
-            mode, times, poa_clearsky, degradation, deterministic_price_1_2_3a,
-            system_solar_proxy, load, config, n_paths, base_strike,
-            central_solar, central_prices, central_cloud, central_wind,
+    inp = _PathInputs(
+        times=times,
+        poa_clearsky=poa_clearsky,
+        degradation=degradation,
+        deterministic_price_1_2_3a=deterministic_price_1_2_3a,
+        system_solar_proxy=system_solar_proxy,
+        load=load,
+        config=config,
+        base_strike=base_strike,
+        central_solar=central_solar,
+        central_prices=central_prices,
+        central_cloud=central_cloud,
+        central_wind=central_wind,
+    )
+
+    # Step 4: run ensembles — parallel across worker processes when the run
+    # is big enough to amortise pool startup, sequential otherwise.
+    if n_jobs is None:
+        n_jobs = max(1, (os.cpu_count() or 2) - 1)
+    total_paths = n_paths * len(modes)
+
+    if n_jobs > 1 and total_paths >= 2 * n_jobs:
+        chunk_size = max(1, -(-n_paths // (n_jobs * 3)))  # ceil division
+        tasks: list[tuple[str, list[int]]] = []
+        for mode in modes:
+            for lo in range(0, n_paths, chunk_size):
+                tasks.append((mode, list(range(lo, min(lo + chunk_size, n_paths)))))
+        logger.info(
+            "Running %d paths x %d modes on %d workers (%d chunks)...",
+            n_paths, len(modes), n_jobs, len(tasks),
         )
-        frames.append(df)
+        results: list[pd.DataFrame | None] = [None] * len(tasks)
+        with ProcessPoolExecutor(
+            max_workers=n_jobs, initializer=_pool_init, initargs=(inp,)
+        ) as pool:
+            future_idx = {
+                pool.submit(_run_chunk, task): k for k, task in enumerate(tasks)
+            }
+            done = 0
+            for fut in as_completed(future_idx):
+                results[future_idx[fut]] = fut.result()
+                done += 1
+                if done % max(1, len(tasks) // 10) == 0 or done == len(tasks):
+                    logger.info(
+                        "  chunk %d/%d  elapsed=%.1fs",
+                        done, len(tasks), time.time() - t_start,
+                    )
+        frames = [df for df in results if df is not None]
+    else:
+        frames = [_run_ensemble(mode, inp, n_paths) for mode in modes]
 
     paths_df = pd.concat(frames, ignore_index=True)
     elapsed = time.time() - t_start

@@ -21,6 +21,7 @@ from scipy.special import expit, logit
 
 from ppa_engine.config import PPAConfig
 from ppa_engine.data.solar_production import _clearsky_poa
+from ppa_engine.utils.ar1 import _ar1_filter
 
 # Different prime from price_process to avoid seed collisions across modules
 _PATH_PRIME = 999_983
@@ -52,7 +53,7 @@ def _cloud_factor_matrix(
 
     # Monthly means → logit space (deterministic, same for all paths)
     monthly_logit = np.array([logit(m) for m in sc.monthly_cloud_means])
-    hour_logit_mean = monthly_logit[np.array([t.month - 1 for t in times])]
+    hour_logit_mean = monthly_logit[times.month.to_numpy() - 1]
 
     # Independent standardised AR(1) per path
     all_eps = np.empty((n_paths, T), dtype=np.float64)
@@ -61,10 +62,9 @@ def _cloud_factor_matrix(
         all_eps[i] = rng.standard_normal(T)
 
     # Vectorised standardised AR(1): marginal std = 1
-    z = np.empty((n_paths, T), dtype=np.float64)
-    z[:, 0] = all_eps[:, 0]
-    for t in range(1, T):
-        z[:, t] = phi * z[:, t - 1] + sigma_innov * all_eps[:, t]
+    driver = sigma_innov * all_eps
+    driver[:, 0] = all_eps[:, 0]
+    z = _ar1_filter(driver, phi, axis=1)
 
     # Map to (0, 1): cloud[i, t] = expit(mean[t] + scale * z[i, t])
     # hour_logit_mean shape (T,) → broadcast with z shape (n_paths, T)
@@ -90,8 +90,8 @@ def compute_annual_percentiles(
     dict with keys 'years', 'p10', 'p50', 'p90'.
     Each percentile array has shape (n_years,) in GWh.
     """
-    years = sorted(set(t.year for t in times))
-    times_years = np.array([t.year for t in times])
+    times_years = times.year.to_numpy()
+    years = [int(y) for y in np.unique(times_years)]
 
     p10_vals, p50_vals, p90_vals = [], [], []
     for year in years:
@@ -147,7 +147,7 @@ def generate_production_scenarios(
     sc = config.solar
     dc = config.deal
     start_year = pd.Timestamp(dc.start_date).year
-    year_offset = np.array([t.year - start_year for t in times])
+    year_offset = times.year.to_numpy() - start_year
     degradation = 1.0 - sc.degradation_rate * year_offset
 
     cloud_matrix = _cloud_factor_matrix(times, config, n_paths, base_seed)

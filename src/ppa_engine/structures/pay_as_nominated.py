@@ -35,6 +35,10 @@ class PayAsNominated(SupplyStructure):
 
     def __init__(self, nomination_fraction: float = 1.0) -> None:
         self.nomination_fraction = nomination_fraction
+        # The nomination is a pure function of the solar series, and the
+        # valuation engine reuses one instance across all pricing structures
+        # with the very same series — cache by object identity.
+        self._cache: tuple[pd.Series, pd.Series] | None = None
 
     def settled_volume(
         self,
@@ -47,9 +51,13 @@ class PayAsNominated(SupplyStructure):
         Nomination is the daily mean of solar, broadcast back to hourly.
         This is a first-order approximation of a day-ahead nomination schedule.
         """
+        cached = self._cache
+        if cached is not None and cached[0] is solar:
+            return cached[1]
         # TODO (Phase 2): replace with a proper nomination model
         daily_mean = solar.resample("D").transform("mean")
         nominated = (daily_mean * self.nomination_fraction).rename(
             "settled_volume_mwh"
         )
+        self._cache = (solar, nominated)
         return nominated

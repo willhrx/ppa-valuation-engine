@@ -16,7 +16,18 @@ Carlo path generator in ``risk/price_process.py``.
 from __future__ import annotations
 
 import numpy as np
+from scipy.signal import lfilter
 from scipy.special import expit
+
+
+def _ar1_filter(driver: np.ndarray, phi: float, axis: int = -1) -> np.ndarray:
+    """Evaluate x[t] = phi * x[t-1] + driver[t] (x[0] = driver[0]) in C.
+
+    scipy.signal.lfilter with b=[1], a=[1, -phi] computes exactly this
+    recurrence, replacing the original pure-Python loop (~87k steps per
+    series) with a single C pass. Results match the loop to float precision.
+    """
+    return lfilter([1.0], [1.0, -phi], driver, axis=axis)
 
 
 def ar1_process(
@@ -36,11 +47,9 @@ def ar1_process(
     sigma_innov = sigma_stationary * np.sqrt(1.0 - phi * phi)
 
     eps = rng.standard_normal(n)
-    x = np.empty(n)
-    x[0] = sigma_stationary * eps[0]
-    for t in range(1, n):
-        x[t] = phi * x[t - 1] + sigma_innov * eps[t]
-    return x
+    driver = sigma_innov * eps
+    driver[0] = sigma_stationary * eps[0]
+    return _ar1_filter(driver, phi)
 
 
 def ar1_logit_process(
@@ -74,10 +83,9 @@ def ar1_logit_process(
     sigma_innov = np.sqrt(1.0 - phi * phi)
 
     eps = rng.standard_normal(n)
-    z = np.empty(n)
-    z[0] = eps[0]
-    for t in range(1, n):
-        z[t] = phi * z[t - 1] + sigma_innov * eps[t]
+    driver = sigma_innov * eps
+    driver[0] = eps[0]
+    z = _ar1_filter(driver, phi)
 
     return expit(monthly_logit_means + logit_scale * z)
 
@@ -102,9 +110,6 @@ def ar1_noise_matrix(
         rng = np.random.default_rng(base_seed + i * path_prime)
         all_eps[i] = rng.standard_normal(T)
 
-    noise = np.empty((n_paths, T), dtype=np.float64)
-    noise[:, 0] = sigma_stationary * all_eps[:, 0]
-    for t in range(1, T):
-        noise[:, t] = phi * noise[:, t - 1] + sigma_innov * all_eps[:, t]
-
-    return noise
+    driver = sigma_innov * all_eps
+    driver[:, 0] = sigma_stationary * all_eps[:, 0]
+    return _ar1_filter(driver, phi, axis=1)

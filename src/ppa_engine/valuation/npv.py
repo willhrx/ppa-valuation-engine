@@ -21,6 +21,24 @@ import pandas as pd
 
 from ppa_engine.config import PPAConfig, DEFAULT_CONFIG
 
+# Single-slot cache for discount factors. The factors are a pure function of
+# (index, discount rate), and the valuation engine evaluates 12+ combinations
+# against the very same index per scenario — recomputing the tz-aware
+# timedelta + power over 87k hours each time dominates compute_npv. Identity
+# comparison (`is`) plus the stored strong reference makes stale hits
+# impossible; a mismatch simply recomputes.
+_DISCOUNT_CACHE: list[tuple[pd.Index, float, np.ndarray] | None] = [None]
+
+
+def _discount_factors(index: pd.Index, r: float) -> np.ndarray:
+    cached = _DISCOUNT_CACHE[0]
+    if cached is not None and cached[0] is index and cached[1] == r:
+        return cached[2]
+    hours_elapsed = (index - index[0]).total_seconds() / 3600.0
+    factors = np.asarray((1 + r) ** (-hours_elapsed / 8760))
+    _DISCOUNT_CACHE[0] = (index, r, factors)
+    return factors
+
 
 def compute_npv(
     volume: pd.Series,
@@ -66,13 +84,9 @@ def compute_npv(
     # Hourly cash flows (producer perspective: positive when strike > spot)
     cash_flows = volume * (strike_price - market_price)
 
-    # Compute hours elapsed from contract start
-    start_time = volume.index[0]
-    hours_elapsed = (volume.index - start_time).total_seconds() / 3600.0
-
     # Continuous discount factors: (1 + r)^(-t/8760)
     # where t is hours from start and 8760 is hours per year
-    discount_factors = (1 + r) ** (-hours_elapsed / 8760)
+    discount_factors = _discount_factors(volume.index, r)
 
     # NPV = sum of discounted cash flows
     npv = float((cash_flows * discount_factors).sum())

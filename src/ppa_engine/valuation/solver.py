@@ -32,6 +32,7 @@ from ppa_engine.config import PPAConfig
 from ppa_engine.pricing.base import PricingStructure
 from ppa_engine.pricing.fixed import FixedFlat
 from ppa_engine.structures.base import SupplyStructure
+from ppa_engine.utils.ar1 import _ar1_filter
 from ppa_engine.valuation.engine import value_ppa
 from ppa_engine.valuation.npv import compute_npv
 
@@ -189,14 +190,13 @@ def _fair_solar_series(
     sigma_innov = np.sqrt(1.0 - phi * phi)
 
     monthly_logit = np.array([logit(m) for m in sc.monthly_cloud_means])
-    hour_logit_mean = monthly_logit[np.array([t.month - 1 for t in times])]
+    hour_logit_mean = monthly_logit[times.month.to_numpy() - 1]
 
     rng = np.random.default_rng(_FAIR_SOLAR_BASE + i * _FAIR_PRIME)
     eps = rng.standard_normal(T)
-    z = np.empty(T)
-    z[0] = eps[0]
-    for t in range(1, T):
-        z[t] = phi * z[t - 1] + sigma_innov * eps[t]
+    driver = sigma_innov * eps
+    driver[0] = eps[0]
+    z = _ar1_filter(driver, phi)
 
     cloud = expit(hour_logit_mean + scale * z)
     out = (
@@ -223,10 +223,9 @@ def _fair_price_series(
 
     rng = np.random.default_rng(_FAIR_PRICE_BASE + i * _FAIR_PRIME)
     eps = rng.standard_normal(T)
-    noise = np.empty(T)
-    noise[0] = sigma * eps[0]
-    for t in range(1, T):
-        noise[t] = phi * noise[t - 1] + sigma_innov * eps[t]
+    driver = sigma_innov * eps
+    driver[0] = sigma * eps[0]
+    noise = _ar1_filter(driver, phi)
 
     return pd.Series(
         deterministic_layers + noise, index=times, name="market_price_eur_mwh"
@@ -497,7 +496,7 @@ def solve_fair_strike_cross_structure(
     # computed once and reused across all paths.
     system_solar_proxy = compute_system_solar_proxy(times, config)
     start_year = pd.Timestamp(config.deal.start_date).year
-    year_offset = np.array([t.year - start_year for t in times])
+    year_offset = times.year.to_numpy() - start_year
     degradation = 1.0 - config.solar.degradation_rate * year_offset
     # Hold wind at the central realisation across all fair-strike paths so
     # structural differences (not path luck) drive the strike gap.

@@ -42,3 +42,4 @@ htmlcov/
 # Distribution
 *.whl
 *.tar.gz
+scripts/_perf_reference.pkl

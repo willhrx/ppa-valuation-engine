@@ -80,12 +80,12 @@ def generate_consumer_load(config: PPAConfig | None = None) -> pd.Series:
     wd_shape = np.array(lc.weekday_hourly_shape)
     we_shape = np.array(lc.weekend_hourly_shape)
 
-    hours = np.array([t.hour for t in times], dtype=int)
-    is_weekend = np.array([t.dayofweek >= 5 for t in times])
+    hours = times.hour.to_numpy()
+    is_weekend = times.dayofweek.to_numpy() >= 5
     base = np.where(is_weekend, we_shape[hours], wd_shape[hours])
 
     # -- Step 2: seasonal modulation ----------------------------------------
-    doy = np.array([t.dayofyear for t in times], dtype=float)
+    doy = times.dayofyear.to_numpy().astype(float)
     seasonal = 1.0 + lc.seasonal_amplitude * np.cos(
         2.0 * np.pi * (doy - lc.seasonal_peak_day) / 365.25
     )
@@ -105,8 +105,9 @@ def generate_consumer_load(config: PPAConfig | None = None) -> pd.Series:
     # Rescale each calendar year independently so annual totals match target
     target_mwh = lc.annual_consumption_gwh * 1_000.0
     load = raw_load.copy()
+    times_year = times.year.to_numpy()
     for year in range(start_year, end_year + 1):
-        mask = np.array([t.year == year for t in times])
+        mask = times_year == year
         year_sum = raw_load[mask].sum()
         if year_sum > 0:
             load[mask] = raw_load[mask] * (target_mwh / year_sum)

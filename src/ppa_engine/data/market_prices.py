@@ -83,16 +83,16 @@ def _layer1_level(times: pd.DatetimeIndex, config: PPAConfig) -> np.ndarray:
     mc = config.market
     start_year = pd.Timestamp(config.deal.start_date).year
     # Fractional years elapsed (continuous, to avoid step discontinuities)
-    years = np.array(
-        [(t.year - start_year) + (t.dayofyear - 1) / 365.25 for t in times]
-    )
+    years = (times.year.to_numpy() - start_year) + (
+        times.dayofyear.to_numpy() - 1
+    ) / 365.25
     return mc.base_price + mc.drift * years
 
 
 def _layer2_seasonal(times: pd.DatetimeIndex, config: PPAConfig) -> np.ndarray:
     """Seasonal cosine wave — winter high, summer low."""
     mc = config.market
-    doy = np.array([t.dayofyear for t in times])
+    doy = times.dayofyear.to_numpy()
     return mc.seasonal_amplitude * np.cos(
         2.0 * np.pi * (doy - mc.seasonal_peak_day) / 365.25
     )
@@ -113,11 +113,11 @@ def _layer3a_demand(times: pd.DatetimeIndex, config: PPAConfig) -> np.ndarray:
     wd_arr = np.array(mc.demand_weekday_shape, dtype=float)
     we_arr = np.array(mc.demand_weekend_shape, dtype=float)
 
-    hours = np.array([t.hour for t in times], dtype=int)
-    is_weekend = np.array([t.dayofweek >= 5 for t in times])
+    hours = times.hour.to_numpy()
+    is_weekend = times.dayofweek.to_numpy() >= 5
     base = np.where(is_weekend, we_arr[hours], wd_arr[hours])
 
-    doy = np.array([t.dayofyear for t in times], dtype=float)
+    doy = times.dayofyear.to_numpy().astype(float)
     seasonal_uplift = 1.0 + mc.demand_winter_uplift * np.cos(
         2.0 * np.pi * (doy - mc.demand_peak_day) / 365.25
     )
@@ -143,8 +143,8 @@ def compute_wind_factor(
     """
     mc = config.market
     monthly_logit = np.array([logit(m) for m in mc.monthly_wind_means])
-    months = np.array([t.month - 1 for t in times], dtype=int)
-    hours = np.array([t.hour for t in times], dtype=int)
+    months = times.month.to_numpy() - 1
+    hours = times.hour.to_numpy()
     diurnal = np.array(mc.wind_diurnal_logit_adder, dtype=float)
     logit_mean = monthly_logit[months] + diurnal[hours]
     return ar1_logit_process(
@@ -186,7 +186,7 @@ def _layer3b_wind_supply(
     if wind_cf is None:
         wind_cf = compute_wind_factor(times, config, seed=seed)
 
-    years = np.array([t.year - start_year for t in times], dtype=float)
+    years = (times.year.to_numpy() - start_year).astype(float)
     beta = mc.beta_wind_2027 + (
         mc.beta_wind_2036 - mc.beta_wind_2027
     ) * years / tenor
@@ -272,8 +272,8 @@ def _layer4_cannibalisation(
         system_solar_proxy = compute_system_solar_proxy(times, config)
     proxy = np.asarray(system_solar_proxy, dtype=float)
 
-    months = np.array([t.month - 1 for t in times], dtype=int)
-    years = np.array([t.year - start_year for t in times], dtype=float)
+    months = times.month.to_numpy() - 1
+    years = (times.year.to_numpy() - start_year).astype(float)
 
     rho = float(mc.production_cannibalisation_correlation)
     if cloud_factor is not None and rho > 0.0:
