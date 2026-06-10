@@ -202,7 +202,7 @@ function App() {
                 id="deal-setup"
                 className="col-span-12 scroll-mt-20 lg:col-span-3"
               >
-                <div className="lg:sticky lg:top-20 lg:max-h-[calc(100vh-6rem)]">
+                <div className="lg:sticky lg:top-20 lg:flex lg:h-[calc(100vh-6rem)] lg:flex-col">
                   <ConfigPanel
                     initial={defaults.config}
                     baseStrike={DEFAULT_BASE_STRIKE}
