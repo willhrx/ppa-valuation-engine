@@ -112,6 +112,48 @@
         }
       }
     },
+    "/api/capture-timeline": {
+      "post": {
+        "tags": [
+          "profiles"
+        ],
+        "summary": "Capture Timeline",
+        "description": "Per-calendar-year capture rate of the central scenario \u2014 how the\nproduction-weighted price compares to the baseload average as\ncannibalisation deepens over the horizon.",
+        "operationId": "capture_timeline_api_capture_timeline_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PPAConfigSchema"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaptureTimelineResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/valuation/matrix": {
       "post": {
         "tags": [
@@ -343,6 +385,36 @@
   },
   "components": {
     "schemas": {
+      "CaptureTimelineResponse": {
+        "properties": {
+          "years": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Years"
+          },
+          "capture_rate": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Capture Rate"
+          },
+          "horizon_capture_rate": {
+            "type": "number",
+            "title": "Horizon Capture Rate"
+          }
+        },
+        "type": "object",
+        "required": [
+          "years",
+          "capture_rate",
+          "horizon_capture_rate"
+        ],
+        "title": "CaptureTimelineResponse",
+        "description": "Per-calendar-year capture rate of the central scenario."
+      },
       "ComboRiskSummarySchema": {
         "properties": {
           "supply_structure": {

@@ -76,6 +76,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/capture-timeline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Capture Timeline
+         * @description Per-calendar-year capture rate of the central scenario — how the
+         *     production-weighted price compares to the baseload average as
+         *     cannibalisation deepens over the horizon.
+         */
+        post: operations["capture_timeline_api_capture_timeline_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/valuation/matrix": {
         parameters: {
             query?: never;
@@ -182,6 +204,18 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * CaptureTimelineResponse
+         * @description Per-calendar-year capture rate of the central scenario.
+         */
+        CaptureTimelineResponse: {
+            /** Years */
+            years: number[];
+            /** Capture Rate */
+            capture_rate: number[];
+            /** Horizon Capture Rate */
+            horizon_capture_rate: number;
+        };
         /** ComboRiskSummarySchema */
         ComboRiskSummarySchema: {
             /** Supply Structure */
@@ -2146,6 +2180,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProfilesResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    capture_timeline_api_capture_timeline_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PPAConfigSchema"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaptureTimelineResponse"];
                 };
             };
             /** @description Validation Error */

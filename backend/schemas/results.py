@@ -19,6 +19,14 @@ class ProfilesResponse(BaseModel):
     timezone: str
 
 
+class CaptureTimelineResponse(BaseModel):
+    """Per-calendar-year capture rate of the central scenario."""
+
+    years: list[int]
+    capture_rate: list[float]
+    horizon_capture_rate: float
+
+
 class ValuationRowSchema(BaseModel):
     supply_structure: str
     pricing_structure: str

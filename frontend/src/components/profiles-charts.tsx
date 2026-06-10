@@ -14,10 +14,15 @@ import {
 import { Card, CardContent } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { PanelError, PanelLoading } from '@/components/spinner'
-import { api, type PPAConfig, type ProfilesResponse } from '@/lib/api'
+import {
+  api,
+  type CaptureTimeline,
+  type PPAConfig,
+  type ProfilesResponse,
+} from '@/lib/api'
 import { aggregateToDaily, sliceWindow } from '@/lib/downsample'
 import { fmtNumber } from '@/lib/format'
-import { useAsyncCall } from '@/hooks/useAsync'
+import { useAsyncCall, type AsyncState } from '@/hooks/useAsync'
 
 interface ProfilesChartsProps {
   config: PPAConfig | null
@@ -32,6 +37,13 @@ export function ProfilesCharts({ config }: ProfilesChartsProps) {
     (signal) => {
       if (!config) return Promise.reject(new Error('no config'))
       return api.profiles(config, signal)
+    },
+    [config],
+  )
+  const { state: captureState } = useAsyncCall<CaptureTimeline>(
+    (signal) => {
+      if (!config) return Promise.reject(new Error('no config'))
+      return api.captureTimeline(config, signal)
     },
     [config],
   )
@@ -78,7 +90,9 @@ export function ProfilesCharts({ config }: ProfilesChartsProps) {
           <PanelLoading message="Generating 10-year hourly profile (~10–12 s)…" />
         )}
         {state.status === 'error' && <PanelError message={state.message} />}
-        {state.status === 'success' && <ChartTabs profiles={state.data} />}
+        {state.status === 'success' && (
+          <ChartTabs profiles={state.data} capture={captureState} />
+        )}
       </CardContent>
     </Card>
   )
@@ -108,7 +122,13 @@ function LegendPill({ color, label, value }: LegendPillProps) {
   )
 }
 
-function ChartTabs({ profiles }: { profiles: ProfilesResponse }) {
+function ChartTabs({
+  profiles,
+  capture,
+}: {
+  profiles: ProfilesResponse
+  capture: AsyncState<CaptureTimeline>
+}) {
   const daily = useMemo(() => aggregateToDaily(profiles), [profiles])
   const week = useMemo(() => {
     const year = Number(profiles.timestamps[0].slice(0, 4)) + 1
@@ -142,6 +162,9 @@ function ChartTabs({ profiles }: { profiles: ProfilesResponse }) {
           </TabsTrigger>
           <TabsTrigger value="week" className="text-[11.5px]">
             Sample week · hourly
+          </TabsTrigger>
+          <TabsTrigger value="capture" className="text-[11.5px]">
+            Capture rate · annual
           </TabsTrigger>
         </TabsList>
 
@@ -357,6 +380,81 @@ function ChartTabs({ profiles }: { profiles: ProfilesResponse }) {
           </ResponsiveContainer>
         </div>
       </TabsContent>
+
+      <TabsContent value="capture" className="pt-4">
+        {capture.status === 'loading' && (
+          <PanelLoading message="Computing annual capture rates…" />
+        )}
+        {capture.status === 'error' && <PanelError message={capture.message} />}
+        {capture.status === 'success' && (
+          <CaptureTimelineChart data={capture.data} />
+        )}
+      </TabsContent>
     </Tabs>
+  )
+}
+
+function CaptureTimelineChart({ data }: { data: CaptureTimeline }) {
+  const rows = data.years.map((year, i) => ({
+    year,
+    capture: data.capture_rate[i],
+  }))
+  return (
+    <div>
+      <p className="mb-2 text-[11px] text-muted-foreground">
+        Production-weighted price ÷ baseload average per calendar year
+        (central scenario). Horizon capture rate:{' '}
+        <span className="font-mono font-semibold text-foreground">
+          {(data.horizon_capture_rate * 100).toFixed(1)}%
+        </span>
+        . The decline is the cannibalisation ramp doing its work.
+      </p>
+      <div className="aspect-[16/6] w-full min-h-[300px]">
+        <ResponsiveContainer width="100%" height="100%">
+          <ComposedChart
+            data={rows}
+            margin={{ top: 10, right: 28, left: 0, bottom: 4 }}
+          >
+            <CartesianGrid stroke="var(--border)" strokeDasharray="2 4" />
+            <XAxis
+              dataKey="year"
+              tick={{ fontSize: 10, fill: 'var(--muted-foreground)' }}
+              stroke="var(--border)"
+            />
+            <YAxis
+              domain={[
+                (min: number) => Math.floor((min - 0.03) * 20) / 20,
+                (max: number) => Math.ceil((max + 0.03) * 20) / 20,
+              ]}
+              tick={{ fontSize: 10, fill: 'var(--muted-foreground)' }}
+              width={50}
+              tickFormatter={(v: number) => `${(v * 100).toFixed(0)}%`}
+              stroke="var(--border)"
+            />
+            <Tooltip
+              contentStyle={{
+                fontSize: 11,
+                background: 'var(--popover)',
+                border: '1px solid var(--border)',
+                borderRadius: 8,
+                boxShadow: '0 4px 12px rgba(20, 14, 6, 0.08)',
+              }}
+              formatter={(value) => [
+                `${(Number(value) * 100).toFixed(1)}%`,
+                'Capture rate',
+              ]}
+            />
+            <Line
+              type="monotone"
+              dataKey="capture"
+              name="Capture rate"
+              stroke={SOLAR_COLOR}
+              strokeWidth={2}
+              dot={{ r: 3, fill: SOLAR_COLOR }}
+            />
+          </ComposedChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
   )
 }

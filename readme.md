@@ -44,24 +44,25 @@ including an interactive **MapLibre asset-location picker** that drives
 `pvlib` solar geometry — and the right column shows, top to bottom:
 
 - A KPI strip with capture rate, NPV, negotiation range, and profile risk.
-- The generation / load / price profile chart (daily over the horizon and a
-  sample-week hourly close-up).
+- The generation / load / price profile chart (daily over the horizon, a
+  sample-week hourly close-up, and an annual capture-rate timeline from
+  `/api/capture-timeline`).
 - The valuation matrix: NPVs across all 12 supply × pricing combinations,
-  with a **"Run risk analysis"** button that fires `/api/simulate`
-  (~45 s). Once the simulation completes, each matrix row expands inline
-  to reveal its Monte Carlo distribution — P10/P50/P90 NPV, VaR(95%),
-  Expected Shortfall, P(NPV < 0), and a variance-attribution bar splitting
-  total NPV variance into price / volume / interaction components.
+  with a **"Run risk analysis"** button that fires `/api/simulate` with a
+  selectable path count (200 ≈ 1 min … 2000 ≈ 10 min on a 6-core machine;
+  paths are distributed across CPU cores). Once the simulation completes,
+  each matrix row expands inline to reveal its Monte Carlo distribution —
+  an NPV histogram overlaying the joint / price-only / volume-only
+  ensembles, P10/P50/P90 NPV, VaR(95%), Expected Shortfall, P(NPV < 0),
+  and a variance-attribution bar splitting total NPV variance into
+  price / volume / interaction components. Results survive config changes
+  (flagged stale) and failures surface with a retry.
+- The pricing solver: negotiation range per supply structure, tornado
+  sensitivity bars, and cross-structure fair-strike comparison — all
+  on-demand against `/api/solver/*`.
 
-The top nav (`Deal setup` / `Profiles` / `Valuation` / `Risk`) is a set of
-scroll-anchor links — every section lives on the same page.
-
-#### Backend-only routes (no UI yet)
-
-`/api/solver/*` (negotiation range, tornado sensitivities, cross-structure
-fair strikes) is exposed by `backend/routers/solver.py` but is not surfaced
-in the frontend yet — drive it from `http://localhost:8000/docs` or a
-notebook for now.
+The top nav (`Deal setup` / `Profiles` / `Valuation` / `Risk` / `Solver`)
+is a set of scroll-anchor links — every section lives on the same page.
 
 ### 3. Refreshing the API contract
 
@@ -219,8 +220,7 @@ ppa-valuation-engine/
 │   ├── openapi.json               # exported spec consumed by the frontend
 │   ├── routers/                   # one router per domain endpoint
 │   │   ├── config.py              #   /api/config/{defaults,validate}
-│   │   ├── profiles.py            #   /api/profiles
-│   │   ├── preview.py             #   /api/preview
+│   │   ├── profiles.py            #   /api/profiles, /api/capture-timeline
 │   │   ├── valuation.py           #   /api/valuation/matrix
 │   │   ├── simulation.py          #   /api/simulate
 │   │   └── solver.py              #   /api/solver/{negotiation-range,tornado,fair-strike}

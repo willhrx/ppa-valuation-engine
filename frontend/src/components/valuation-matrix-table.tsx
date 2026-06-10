@@ -35,6 +35,19 @@ interface ValuationMatrixTableProps {
   hasConfig: boolean
   baseStrike: number
   simulation: RiskSimulationHandle
+  nPaths: number
+  onNPathsChange: (n: number) => void
+}
+
+const N_PATH_CHOICES = [200, 500, 1000, 2000]
+
+// Rough wall-clock guidance measured on a 6-core box (engine parallelises
+// paths across cores) — purely a UI hint.
+const N_PATH_ETA: Record<number, string> = {
+  200: '~1 min',
+  500: '~2.5 min',
+  1000: '~5 min',
+  2000: '~10 min',
 }
 
 const SUPPLY_LABELS: Record<string, string> = {
@@ -71,6 +84,8 @@ export function ValuationMatrixTable({
   hasConfig,
   baseStrike,
   simulation,
+  nPaths,
+  onNPathsChange,
 }: ValuationMatrixTableProps) {
   const { state, refetch } = matrix
 
@@ -90,7 +105,28 @@ export function ValuationMatrixTable({
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <RunRiskButton simulation={simulation} disabled={!hasConfig} />
+          {simulation.state.status !== 'loading' && (
+            <label className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
+              paths
+              <select
+                value={nPaths}
+                onChange={(e) => onNPathsChange(Number(e.target.value))}
+                className="rounded-[6px] border bg-transparent px-1.5 py-1 font-mono text-[11px]"
+                title="Paths per ensemble (joint / price / volume all run)"
+              >
+                {N_PATH_CHOICES.map((n) => (
+                  <option key={n} value={n}>
+                    {n}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          <RunRiskButton
+            simulation={simulation}
+            disabled={!hasConfig}
+            eta={N_PATH_ETA[nPaths] ?? ''}
+          />
           {state.status === 'success' && (
             <button
               type="button"
@@ -123,9 +159,11 @@ export function ValuationMatrixTable({
 function RunRiskButton({
   simulation,
   disabled,
+  eta,
 }: {
   simulation: RiskSimulationHandle
   disabled: boolean
+  eta: string
 }) {
   const { state, run } = simulation
   if (state.status === 'loading') {
@@ -229,7 +267,7 @@ function RunRiskButton({
           'inset 0 1px 0 color-mix(in oklch, white 20%, transparent)',
       }}
     >
-      Run risk analysis · ~2 min
+      Run risk analysis{eta ? ` · ${eta}` : ''}
     </button>
   )
 }

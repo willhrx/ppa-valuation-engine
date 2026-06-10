@@ -1,4 +1,4 @@
-import { useState, type CSSProperties } from 'react'
+import { useRef, useState, type CSSProperties } from 'react'
 
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -14,6 +14,146 @@ interface ConfigPanelProps {
   onReset: () => Promise<PPAConfig>
   baseStrike: number
   busy?: boolean
+}
+
+// 24-hour weekday load-shape presets, ported from the legacy Streamlit app
+// (app/components/config_form.py). Multipliers around a mean of ~1.0.
+const LOAD_PRESETS: Record<string, number[]> = {
+  Industrial: [
+    0.55, 0.5, 0.48, 0.48, 0.52, 0.62, 0.78, 0.9, 0.98, 1.02, 1.1, 1.06, 1.0,
+    1.02, 1.0, 1.02, 1.05, 1.08, 1.1, 1.04, 0.92, 0.8, 0.7, 0.6,
+  ],
+  Office: [
+    0.4, 0.4, 0.4, 0.4, 0.42, 0.5, 0.65, 0.8, 1.0, 1.2, 1.3, 1.3, 1.2, 1.15,
+    1.1, 1.05, 1.0, 0.9, 0.75, 0.65, 0.55, 0.5, 0.45, 0.42,
+  ],
+  Datacentre: Array(24).fill(1.0) as number[],
+}
+
+const SHAPE_MAX = 1.5
+
+function matchPreset(shape: number[]): string | null {
+  for (const [name, preset] of Object.entries(LOAD_PRESETS)) {
+    if (
+      preset.length === shape.length &&
+      preset.every((v, i) => Math.abs(v - shape[i]) < 1e-9)
+    ) {
+      return name
+    }
+  }
+  return null
+}
+
+function LoadShapeEditor({
+  tone,
+  shape,
+  onChange,
+}: {
+  tone: string
+  shape: number[]
+  onChange: (shape: number[]) => void
+}) {
+  const svgRef = useRef<SVGSVGElement>(null)
+  const dragging = useRef(false)
+  const activePreset = matchPreset(shape)
+
+  const applyPoint = (clientX: number, clientY: number) => {
+    const el = svgRef.current
+    if (!el) return
+    const rect = el.getBoundingClientRect()
+    const hour = Math.min(
+      23,
+      Math.max(0, Math.floor(((clientX - rect.left) / rect.width) * 24)),
+    )
+    const raw = (1 - (clientY - rect.top) / rect.height) * SHAPE_MAX
+    const value = Math.round(Math.min(SHAPE_MAX, Math.max(0.1, raw)) * 100) / 100
+    if (shape[hour] === value) return
+    const next = [...shape]
+    next[hour] = value
+    onChange(next)
+  }
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between">
+        <Label className="text-[11px] text-muted-foreground">
+          Weekday hourly shape
+        </Label>
+        <span className="font-mono text-[10px] text-muted-foreground">
+          {activePreset ?? 'Custom'}
+        </span>
+      </div>
+      <div className="flex gap-1">
+        {Object.keys(LOAD_PRESETS).map((name) => (
+          <button
+            key={name}
+            type="button"
+            onClick={() => onChange([...LOAD_PRESETS[name]])}
+            className="flex-1 rounded-[6px] border px-1.5 py-1 text-[10.5px] transition-colors"
+            style={
+              activePreset === name
+                ? {
+                    background: `color-mix(in oklch, ${tone} 14%, transparent)`,
+                    borderColor: `color-mix(in oklch, ${tone} 40%, transparent)`,
+                    color: tone,
+                    fontWeight: 600,
+                  }
+                : { color: 'var(--muted-foreground)' }
+            }
+          >
+            {name}
+          </button>
+        ))}
+      </div>
+      <svg
+        ref={svgRef}
+        viewBox="0 0 240 56"
+        preserveAspectRatio="none"
+        className="h-14 w-full cursor-crosshair touch-none rounded-md border bg-card"
+        role="img"
+        aria-label="Editable 24-hour load shape — click or drag to adjust"
+        onPointerDown={(e) => {
+          dragging.current = true
+          e.currentTarget.setPointerCapture(e.pointerId)
+          applyPoint(e.clientX, e.clientY)
+        }}
+        onPointerMove={(e) => {
+          if (dragging.current) applyPoint(e.clientX, e.clientY)
+        }}
+        onPointerUp={() => {
+          dragging.current = false
+        }}
+      >
+        <line
+          x1={0}
+          x2={240}
+          y1={56 - (1.0 / SHAPE_MAX) * 56}
+          y2={56 - (1.0 / SHAPE_MAX) * 56}
+          stroke="var(--border)"
+          strokeDasharray="3 3"
+        />
+        {shape.map((v, i) => {
+          const h = (Math.min(v, SHAPE_MAX) / SHAPE_MAX) * 56
+          return (
+            <rect
+              key={i}
+              x={i * 10 + 1}
+              y={56 - h}
+              width={8}
+              height={h}
+              rx={1.5}
+              fill={tone}
+              fillOpacity={0.75}
+            />
+          )
+        })}
+      </svg>
+      <p className="text-[10px] leading-snug text-muted-foreground">
+        Click or drag bars to sculpt a custom profile (00–23h). Dashed line =
+        1.0× average.
+      </p>
+    </div>
+  )
 }
 
 interface SliderRowProps {
@@ -359,8 +499,13 @@ export function ConfigPanel({
         </section>
 
         <section className="space-y-2.5">
-          <SectionChip color={load} icon="⚡" title="Offtaker load" count="3 params" />
+          <SectionChip color={load} icon="⚡" title="Offtaker load" count="4 params" />
           <div className="flex flex-col gap-2.5 pl-0.5">
+            <LoadShapeEditor
+              tone={load}
+              shape={draft.load.weekday_hourly_shape}
+              onChange={(shape) => setLoad({ weekday_hourly_shape: shape })}
+            />
             <SliderRow
               id="annual_gwh"
               label="Annual consumption"

@@ -86,8 +86,26 @@ export type DealConfig = Required<Schemas['DealConfigSchema']>
 export type PPAConfig = Required<Schemas['PPAConfigSchema']>
 
 export type ProfilesResponse = Schemas['ProfilesResponse']
+export type CaptureTimeline = Schemas['CaptureTimelineResponse']
 export type ValuationRow = Schemas['ValuationRowSchema']
 export type ValuationMatrixResponse = Schemas['ValuationMatrixResponse']
+
+export type SolverResult = Schemas['SolverResultSchema']
+export type NegotiationRange = Schemas['NegotiationRangeSchema']
+export type NegotiationRangeResponse = Schemas['NegotiationRangeResponse']
+export type TornadoEntry = Schemas['TornadoEntrySchema']
+export type TornadoResult = Schemas['TornadoResultSchema']
+export type FairStrikeResult = Schemas['FairStrikeResultSchema']
+
+export type SupplyKey =
+  | 'pay_as_produced'
+  | 'pay_as_nominated'
+  | 'baseload'
+export type PricingKey =
+  | 'fixed_flat'
+  | 'fixed_escalated'
+  | 'indexed_with_floor_cap'
+  | 'floating'
 
 export type PathDistribution = Schemas['PathDistributionSchema']
 export type VarianceDecomposition = Schemas['VarianceDecompositionSchema']
@@ -132,6 +150,56 @@ export const api = {
     apiPost<MonteCarloResponse>(
       '/api/simulate',
       { config, base_strike: baseStrike, n_paths: nPaths },
+      signal,
+    ),
+  captureTimeline: (config: PPAConfig, signal?: AbortSignal) =>
+    apiPost<CaptureTimeline>('/api/capture-timeline', config, signal),
+  solverNegotiationRange: (
+    config: PPAConfig,
+    targetProducerNpv: number = 0,
+    signal?: AbortSignal,
+  ) =>
+    apiPost<NegotiationRangeResponse>(
+      '/api/solver/negotiation-range',
+      { config, target_producer_npv: targetProducerNpv },
+      signal,
+    ),
+  solverTornado: (
+    config: PPAConfig,
+    supply: SupplyKey,
+    pricing: PricingKey,
+    baseStrike: number,
+    signal?: AbortSignal,
+  ) =>
+    apiPost<TornadoResult>(
+      '/api/solver/tornado',
+      {
+        config,
+        supply_structure: supply,
+        pricing_structure: pricing,
+        base_strike: baseStrike,
+      },
+      signal,
+    ),
+  solverFairStrike: (
+    config: PPAConfig,
+    structureA: SupplyKey,
+    structureB: SupplyKey,
+    pricing: 'fixed_flat' | 'fixed_escalated',
+    strikeA: number,
+    nPaths: number = 200,
+    signal?: AbortSignal,
+  ) =>
+    apiPost<FairStrikeResult>(
+      '/api/solver/fair-strike',
+      {
+        config,
+        structure_a: structureA,
+        structure_b: structureB,
+        pricing_structure: pricing,
+        strike_a: strikeA,
+        n_paths: nPaths,
+      },
       signal,
     ),
 }

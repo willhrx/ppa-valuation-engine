@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { ConfigPanel } from '@/components/config-panel'
 import { KpiStrip } from '@/components/kpi-strip'
 import { ProfilesCharts } from '@/components/profiles-charts'
+import { SolverPanel } from '@/components/solver-panel'
 import { ValuationMatrixTable } from '@/components/valuation-matrix-table'
 import { PanelError, PanelLoading } from '@/components/spinner'
 import { useAsyncCall } from '@/hooks/useAsync'
@@ -31,6 +32,7 @@ const NAV: NavItem[] = [
   { label: 'Profiles', anchor: '#profiles' },
   { label: 'Valuation', anchor: '#valuation' },
   { label: 'Risk', anchor: '#valuation' },
+  { label: 'Solver', anchor: '#solver' },
 ]
 
 function App() {
@@ -40,10 +42,12 @@ function App() {
     baseStrike: number
   } | null>(null)
   const [activeAnchor, setActiveAnchor] = useState<string>('#deal-setup')
+  const [nPaths, setNPaths] = useState<number>(500)
 
   const simulation = useRiskSimulation(
     applied?.config ?? null,
     applied?.baseStrike ?? DEFAULT_BASE_STRIKE,
+    nPaths,
   )
 
   // Single shared valuation-matrix fetch — the KPI strip and the matrix
@@ -78,7 +82,7 @@ function App() {
   }, [])
 
   useEffect(() => {
-    const targets = ['deal-setup', 'profiles', 'valuation']
+    const targets = ['deal-setup', 'profiles', 'valuation', 'solver']
       .map((id) => document.getElementById(id))
       .filter((el): el is HTMLElement => el !== null)
     if (targets.length === 0) return
@@ -112,7 +116,7 @@ function App() {
       ? 'Simulation failed — retry'
       : riskStale
         ? 'Re-run simulation →'
-        : 'Run 500-path simulation →'
+        : `Run ${nPaths}-path simulation →`
 
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">
@@ -256,6 +260,14 @@ function App() {
                     hasConfig={applied !== null}
                     baseStrike={applied.baseStrike}
                     simulation={simulation}
+                    nPaths={nPaths}
+                    onNPathsChange={setNPaths}
+                  />
+                </div>
+                <div id="solver" className="scroll-mt-20">
+                  <SolverPanel
+                    config={applied.config}
+                    baseStrike={applied.baseStrike}
                   />
                 </div>
               </section>
