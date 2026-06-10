@@ -49,7 +49,6 @@ export function useRiskSimulation(
       }
       return prev
     })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [configKey, baseStrikeKey])
 
   const run = useCallback(() => {
