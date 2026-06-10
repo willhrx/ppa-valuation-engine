@@ -5,7 +5,7 @@ import { ApiError, api, type MonteCarloResponse, type PPAConfig } from '@/lib/ap
 export type RiskSimState =
   | { status: 'idle' }
   | { status: 'loading'; startedAt: number }
-  | { status: 'success'; data: MonteCarloResponse }
+  | { status: 'success'; data: MonteCarloResponse; stale: boolean }
   | { status: 'error'; message: string }
 
 export interface RiskSimulationHandle {
@@ -32,12 +32,23 @@ export function useRiskSimulation(
   const configKey = config ? JSON.stringify(config) : null
   const baseStrikeKey = baseStrike
 
+  // On config / strike change: abort an in-flight run, but keep completed
+  // results viewable — just mark them stale so the UI can prompt a re-run.
   useEffect(() => {
-    if (state.status !== 'idle') {
-      controllerRef.current?.abort()
-      controllerRef.current = null
-      setState({ status: 'idle' })
-    }
+    setState((prev) => {
+      if (prev.status === 'loading') {
+        controllerRef.current?.abort()
+        controllerRef.current = null
+        return { status: 'idle' }
+      }
+      if (prev.status === 'success' && !prev.stale) {
+        return { ...prev, stale: true }
+      }
+      if (prev.status === 'error') {
+        return { status: 'idle' }
+      }
+      return prev
+    })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [configKey, baseStrikeKey])
 
@@ -50,7 +61,8 @@ export function useRiskSimulation(
     setState({ status: 'loading', startedAt: Date.now() })
     api.simulate(config, baseStrike, nPaths, controller.signal).then(
       (data) => {
-        if (myTick === tick.current) setState({ status: 'success', data })
+        if (myTick === tick.current)
+          setState({ status: 'success', data, stale: false })
       },
       (err: unknown) => {
         if (controller.signal.aborted) return

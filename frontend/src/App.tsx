@@ -87,6 +87,16 @@ function App() {
 
   const runRisk = () => simulation.run()
   const riskRunning = simulation.state.status === 'loading'
+  const riskFailed = simulation.state.status === 'error'
+  const riskStale =
+    simulation.state.status === 'success' && simulation.state.stale
+  const headerButtonLabel = riskRunning
+    ? 'Running…'
+    : riskFailed
+      ? 'Simulation failed — retry'
+      : riskStale
+        ? 'Re-run simulation →'
+        : 'Run 500-path simulation →'
 
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">
@@ -175,15 +185,21 @@ function App() {
             type="button"
             onClick={runRisk}
             disabled={!applied || riskRunning}
+            title={
+              riskFailed && simulation.state.status === 'error'
+                ? simulation.state.message
+                : undefined
+            }
             className="h-9 rounded-[9px] px-4 text-[12.5px] font-semibold tracking-[-0.005em] text-primary-foreground transition-shadow hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-60"
             style={{
-              background:
-                'linear-gradient(180deg, var(--accent), var(--accent-deep))',
+              background: riskFailed
+                ? 'linear-gradient(180deg, var(--negative), color-mix(in oklch, var(--negative) 80%, black))'
+                : 'linear-gradient(180deg, var(--accent), var(--accent-deep))',
               boxShadow:
                 'inset 0 1px 0 var(--accent-deep), 0 4px 12px color-mix(in oklch, var(--accent) 25%, transparent)',
             }}
           >
-            {riskRunning ? 'Running…' : 'Run 500-path simulation →'}
+            {headerButtonLabel}
           </button>
         </div>
       </header>

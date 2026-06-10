@@ -155,22 +155,31 @@ function RunRiskButton({
     )
   }
   if (state.status === 'success') {
+    const stale = state.stale
     return (
       <span className="inline-flex items-center gap-3">
         <span
           className="inline-flex items-center gap-2 rounded-[7px] border px-3 py-1.5 font-mono text-[11px]"
           style={{
-            background: 'var(--positive-soft)',
-            borderColor:
-              'color-mix(in oklch, var(--positive) 25%, transparent)',
-            color: 'var(--positive)',
+            background: stale ? 'var(--negative-soft)' : 'var(--positive-soft)',
+            borderColor: `color-mix(in oklch, ${
+              stale ? 'var(--negative)' : 'var(--positive)'
+            } 25%, transparent)`,
+            color: stale ? 'var(--negative)' : 'var(--positive)',
           }}
+          title={
+            stale
+              ? 'The configuration changed after this simulation ran — results no longer match the applied config.'
+              : undefined
+          }
         >
           <span
             className="h-1.5 w-1.5 rounded-full"
-            style={{ background: 'var(--positive)' }}
+            style={{ background: stale ? 'var(--negative)' : 'var(--positive)' }}
           />
-          {state.data.n_paths} paths · {state.data.elapsed_seconds.toFixed(1)}s
+          {stale
+            ? 'results stale — config changed'
+            : `${state.data.n_paths} paths · ${state.data.elapsed_seconds.toFixed(1)}s`}
         </span>
         <button
           type="button"
@@ -178,6 +187,36 @@ function RunRiskButton({
           onClick={run}
         >
           re-run
+        </button>
+      </span>
+    )
+  }
+  if (state.status === 'error') {
+    return (
+      <span className="inline-flex items-center gap-3">
+        <span
+          className="inline-flex max-w-[320px] items-center gap-2 truncate rounded-[7px] border px-3 py-1.5 font-mono text-[11px]"
+          style={{
+            background: 'var(--negative-soft)',
+            borderColor:
+              'color-mix(in oklch, var(--negative) 30%, transparent)',
+            color: 'var(--negative)',
+          }}
+          title={state.message}
+        >
+          <span
+            className="h-1.5 w-1.5 shrink-0 rounded-full"
+            style={{ background: 'var(--negative)' }}
+          />
+          simulation failed: {state.message}
+        </span>
+        <button
+          type="button"
+          className="text-[11px] font-semibold underline-offset-2 hover:underline"
+          style={{ color: 'var(--accent-deep)' }}
+          onClick={run}
+        >
+          retry
         </button>
       </span>
     )
@@ -196,7 +235,7 @@ function RunRiskButton({
           'inset 0 1px 0 color-mix(in oklch, white 20%, transparent)',
       }}
     >
-      Run risk analysis · ~45s
+      Run risk analysis · ~2 min
     </button>
   )
 }
@@ -244,6 +283,8 @@ function Matrix({
   }, [simulation.state])
 
   const riskAvailable = simulation.state.status === 'success'
+  const riskStale =
+    simulation.state.status === 'success' && simulation.state.stale
 
   const toggleRow = (key: string) => {
     setExpanded((prev) => {
@@ -505,6 +546,18 @@ function Matrix({
                 {isOpen && combo && (
                   <TableRow className="border-b">
                     <TableCell colSpan={totalCols} className="p-0">
+                      {riskStale && (
+                        <div
+                          className="px-6 py-1.5 font-mono text-[10.5px]"
+                          style={{
+                            background: 'var(--negative-soft)',
+                            color: 'var(--negative)',
+                          }}
+                        >
+                          ⚠ stale — simulated before the latest config change;
+                          re-run for current numbers
+                        </div>
+                      )}
                       <RiskRowDetail combo={combo} />
                     </TableCell>
                   </TableRow>

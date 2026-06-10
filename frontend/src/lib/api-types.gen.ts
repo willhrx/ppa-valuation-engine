@@ -213,6 +213,21 @@ export interface components {
             price_only: components["schemas"]["PathDistributionSchema"];
             volume_only: components["schemas"]["PathDistributionSchema"];
             variance_decomp: components["schemas"]["VarianceDecompositionSchema"];
+            /**
+             * Npvs Joint
+             * @default []
+             */
+            npvs_joint: number[];
+            /**
+             * Npvs Price
+             * @default []
+             */
+            npvs_price: number[];
+            /**
+             * Npvs Volume
+             * @default []
+             */
+            npvs_volume: number[];
         };
         /** ConsumerLoadConfigSchema */
         ConsumerLoadConfigSchema: {
@@ -879,7 +894,10 @@ export interface components {
         };
         /** MonteCarloResponse */
         MonteCarloResponse: {
-            /** Paths */
+            /**
+             * Paths
+             * @default []
+             */
             paths: components["schemas"]["MonteCarloPathRow"][];
             /** Central Rows */
             central_rows: components["schemas"]["ValuationRowSchema"][];
@@ -1450,6 +1468,11 @@ export interface components {
              *     ]
              */
             modes: ("joint" | "price" | "volume")[];
+            /**
+             * Include Paths
+             * @default false
+             */
+            include_paths: boolean;
         };
         /** SolarConfigSchema */
         SolarConfigSchema: {

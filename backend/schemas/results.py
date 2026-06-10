@@ -80,6 +80,12 @@ class ComboRiskSummarySchema(BaseModel):
     price_only: PathDistributionSchema
     volume_only: PathDistributionSchema
     variance_decomp: VarianceDecompositionSchema
+    # Per-path producer NPVs (rounded to whole EUR) for client-side
+    # histograms. One entry per simulated path; empty when the mode was
+    # not part of the run.
+    npvs_joint: list[float] = []
+    npvs_price: list[float] = []
+    npvs_volume: list[float] = []
 
 
 class RiskSummarySchema(BaseModel):
@@ -103,7 +109,9 @@ class MonteCarloPathRow(BaseModel):
 
 
 class MonteCarloResponse(BaseModel):
-    paths: list[MonteCarloPathRow]
+    # Full long-form path rows are several MB at 500 paths and unused by the
+    # frontend; they are only populated when the request sets include_paths.
+    paths: list[MonteCarloPathRow] = []
     central_rows: list[ValuationRowSchema]
     risk_summary: RiskSummarySchema
     n_paths: int

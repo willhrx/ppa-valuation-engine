@@ -39,11 +39,15 @@ async function request<T>(
     ...init,
   })
   if (!response.ok) {
-    let detail: unknown
+    // Read the body once as text, then try to parse JSON out of it —
+    // calling .json() first and falling back to .text() throws
+    // "body stream already read" and masks the real error.
+    const raw = await response.text()
+    let detail: unknown = raw
     try {
-      detail = (await response.json())?.detail
+      detail = (JSON.parse(raw) as { detail?: unknown })?.detail ?? raw
     } catch {
-      detail = await response.text()
+      // not JSON — keep raw text
     }
     throw new ApiError(response.status, detail)
   }

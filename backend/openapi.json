@@ -413,6 +413,30 @@
           },
           "variance_decomp": {
             "$ref": "#/components/schemas/VarianceDecompositionSchema"
+          },
+          "npvs_joint": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Npvs Joint",
+            "default": []
+          },
+          "npvs_price": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Npvs Price",
+            "default": []
+          },
+          "npvs_volume": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Npvs Volume",
+            "default": []
           }
         },
         "type": "object",
@@ -1246,7 +1270,8 @@
               "$ref": "#/components/schemas/MonteCarloPathRow"
             },
             "type": "array",
-            "title": "Paths"
+            "title": "Paths",
+            "default": []
           },
           "central_rows": {
             "items": {
@@ -1273,7 +1298,6 @@
         },
         "type": "object",
         "required": [
-          "paths",
           "central_rows",
           "risk_summary",
           "n_paths",
@@ -2012,6 +2036,11 @@
               "price",
               "volume"
             ]
+          },
+          "include_paths": {
+            "type": "boolean",
+            "title": "Include Paths",
+            "default": false
           }
         },
         "type": "object",
