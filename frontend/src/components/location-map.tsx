@@ -46,7 +46,9 @@ export function LocationMap({
   const mapRef = useRef<MlMap | null>(null)
   const markerRef = useRef<Marker | null>(null)
   const onChangeRef = useRef(onChange)
-  onChangeRef.current = onChange
+  useEffect(() => {
+    onChangeRef.current = onChange
+  })
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return

@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
 
 import {
   createColumnHelper,
@@ -156,6 +156,21 @@ export function ValuationMatrixTable({
   )
 }
 
+/**
+ * Wall clock that ticks once per second while `active`, so elapsed-time
+ * displays actually update. Returns 0 until the first tick after mount —
+ * callers should clamp elapsed values to ≥ 0.
+ */
+function useNowTicker(active: boolean): number {
+  const [now, setNow] = useState(0)
+  useEffect(() => {
+    if (!active) return
+    const id = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(id)
+  }, [active])
+  return now
+}
+
 function RunRiskButton({
   simulation,
   disabled,
@@ -166,8 +181,9 @@ function RunRiskButton({
   eta: string
 }) {
   const { state, run } = simulation
+  const now = useNowTicker(state.status === 'loading')
   if (state.status === 'loading') {
-    const elapsed = Math.floor((Date.now() - state.startedAt) / 1000)
+    const elapsed = Math.max(0, Math.floor((now - state.startedAt) / 1000))
     return (
       <span
         className="inline-flex items-center gap-2 rounded-[7px] border px-3 py-1.5 font-mono text-[11px]"
